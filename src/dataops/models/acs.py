@@ -429,7 +429,9 @@ class APIData(BaseModel):
         Fetches the human-readable variable labels
         as a list and caches it.
         """
-        raw = self._raw
+
+        raw = _get(self.endpoint.variable_endpoint, self.endpoint.dataset)
+
         final_vars = ["variable", "label", "concept", "group", "universe"]
         default_value = "unknown as queried"
 
