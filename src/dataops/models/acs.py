@@ -165,25 +165,111 @@ class APIData(BaseModel):
             .to_list()
         )
 
-    def _var_parse(self) -> pl.LazyFrame:
-        if self.endpoint.table_type.value == "subject":
-            pass
+    def _parse_vars(self) -> pl.LazyFrame:
+        """
+        Parse all the information/ metadata from the variable
+        name/id based on census documentation.
+        """
 
-        if self.endpoint.table_type.value == "detailed":
-            data = self._lazyframe.with_columns(
-                pl.col("variable")
-                .str.split_exact(by="_", n=1)
-                .struct.rename_fields(["table_id", "line_id"])
-                .alias("parts")
+        # polar expressions
+        table_type_expr = pl.col("variable").str.slice(0, 1).alias("table_type")
+
+        common_var_meta_expr = (
+            pl.col("table_id").str.slice(0, 1).alias("table_type"),
+            pl.col("table_id").str.slice(1, 2).alias("table_subject_id"),
+            pl.col("table_id").str.slice(3, 3).alias("subject_table_number"),
+            pl.col("table_id").str.slice(6).alias("table_id_suffix"),
+        )
+
+        common_line_expr = (
+            pl.col("line_id").str.slice(0, 3).alias("line_number").str.to_integer(),
+            pl.col("line_id").str.slice(3).alias("line_suffix"),
+        )
+
+        final_vars = [
+            "row_id",
+            "variable",
+            "group",
+            "value",
+            "label",
+            "concept",
+            "universe",
+            "date_pulled",
+            "table_id",
+            "column_id",
+            "line_id",
+            "table_type",
+            "column_number",
+            "table_subject_id",
+            "subject_table_number",
+            "table_id_suffix",
+            "line_number",
+            "line_suffix",
+        ]
+
+        # TODO for unknown enum, like multi variable pukks
+        # consider just finding table type per row on the fly?
+        # and for total unknowns for variable meta info -
+        # count the number of _'s?
+
+        # should we just do that for all of them and
+        # forgo the enum:
+        data = self._no_extra
+
+        if self.endpoint.table_type.value == "subject":
+            data = (
+                data.with_columns(
+                    pl.col("variable")
+                    .str.split_exact(by="_", n=2)
+                    .struct.rename_fields(["table_id", "column_id", "line_id"])
+                    .alias("parts")
+                )
+                .with_columns(table_type_expr)
+                .unnest("parts")
+                .with_columns(
+                    pl.col("column_id")
+                    .str.slice(-2)
+                    .str.to_integer()
+                    .alias("column_number"),
+                )
+                .with_columns(common_var_meta_expr)
+                .with_columns(common_line_expr)
+                .with_columns(pl.col(pl.String).replace("", None))
             )
 
-        pass
+        if self.endpoint.table_type.value == "detailed":
+            data = (
+                data.with_columns(
+                    pl.col("variable")
+                    .str.split_exact(by="_", n=1)
+                    .struct.rename_fields(["table_id", "line_id"])
+                    .alias("parts")
+                )
+                .with_columns(table_type_expr)
+                .unnest("parts")
+                .with_columns(common_var_meta_expr)
+                .with_columns(common_line_expr)
+                .with_columns(
+                    pl.lit(None).cast(pl.Int64).alias("column_number"),
+                    pl.lit(None).cast(pl.String).alias("column_id"),
+                    pl.col(pl.String).replace("", None),
+                )
+            )
+
+            # TODO test this out
+            extras = _ensure_column_exists(self._extra, final_vars, "")
+
+            data = pl.concat([data, extras]).with_columns(
+                pl.col(pl.String).replace("", None)
+            )
+
+        return data
 
     @computed_field
     @property
     def _extra(self) -> pl.LazyFrame:
         """
-        Return the extra, often metadata or
+        Returns the extra, often metadata or
         geography-related rows from the LazyFrame.
         """
         return self._lazyframe.filter(
