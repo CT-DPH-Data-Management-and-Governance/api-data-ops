@@ -169,16 +169,18 @@ class APIData(BaseModel):
         origin = self._no_extra
 
         if self.endpoint.table_type.value == "detailed":
+            b_table_parts = ["line_type", "concept_base", "stratifier"]
+
             output = (
                 origin.with_columns(
                     pl.col("label")
                     .str.split_exact("!!", 2)
-                    .struct.rename_fields(["line_type", "concept_base", "stratifier"])
+                    .struct.rename_fields(b_table_parts)
                     .alias("parts")
                 )
                 .unnest("parts")
                 .with_columns(
-                    pl.col(pl.String)
+                    pl.col(b_table_parts)
                     .str.replace_all(r"--|:", "")
                     .str.strip_chars()
                     .str.to_lowercase()
