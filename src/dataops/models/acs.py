@@ -191,6 +191,17 @@ class APIData(BaseModel):
             | (pl.col("group").is_null())
         )
 
+    @computed_field
+    @property
+    def _no_extra(self) -> pl.LazyFrame:
+        """
+        Returns the LazyFrame sans extra rows like metadata
+        or geography-related rows from the LazyFrame, preserves
+        original row_ids.
+        """
+
+        return self._lazyframe.join(self._extra, on="row_id", how="anti")
+
     def fetch_tidyframe(self) -> pl.DataFrame:
         """
         Generate a tidy Polars DataFrame by removing extra rows and adding
