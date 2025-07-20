@@ -394,6 +394,8 @@ class APIData(BaseModel):
                 .join(relevant_variable_labels, how="left", on="variable")
                 .select(final_cols)
             ).with_row_index("row_id")
+        # this ^ returns data which then gets fed into the next if
+        # TODO fix!
 
         if len(data) > 2:
             all_frames = []
