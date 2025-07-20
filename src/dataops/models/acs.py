@@ -165,6 +165,24 @@ class APIData(BaseModel):
             .to_list()
         )
 
+    def _parse_label(self) -> pl.LazyFrame:
+        data = self._no_extra
+
+        if self.endpoint.table_type.value == "detailed":
+            data.with_columns(
+                pl.col("label")
+                .str.split_exact("!!", 2)
+                .struct.rename_fields(["line_type", "concept_base", "stratifier"])
+                .alias("parts")
+            ).unnest("parts").with_columns(
+                pl.col(pl.String)
+                .str.replace_all(r"--|:", "")
+                .str.strip_chars()
+                .str.to_lowercase()
+            )
+
+        return data
+
     def _parse_vars(self) -> pl.LazyFrame:
         """
         Parse all the information/ metadata from the variable
