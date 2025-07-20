@@ -166,22 +166,29 @@ class APIData(BaseModel):
         )
 
     def _parse_label(self) -> pl.LazyFrame:
-        data = self._no_extra
+        origin = self._no_extra
 
         if self.endpoint.table_type.value == "detailed":
-            data.with_columns(
-                pl.col("label")
-                .str.split_exact("!!", 2)
-                .struct.rename_fields(["line_type", "concept_base", "stratifier"])
-                .alias("parts")
-            ).unnest("parts").with_columns(
-                pl.col(pl.String)
-                .str.replace_all(r"--|:", "")
-                .str.strip_chars()
-                .str.to_lowercase()
+            output = (
+                origin.with_columns(
+                    pl.col("label")
+                    .str.split_exact("!!", 2)
+                    .struct.rename_fields(["line_type", "concept_base", "stratifier"])
+                    .alias("parts")
+                )
+                .unnest("parts")
+                .with_columns(
+                    pl.col(pl.String)
+                    .str.replace_all(r"--|:", "")
+                    .str.strip_chars()
+                    .str.to_lowercase()
+                )
             )
+        else:
+            # for now
+            output = origin
 
-        return data
+        return output
 
     def _parse_vars(self) -> pl.LazyFrame:
         """
@@ -232,11 +239,11 @@ class APIData(BaseModel):
 
         # should we just do that for all of them and
         # forgo the enum:
-        data = self._no_extra
+        origin = self._no_extra
 
         if self.endpoint.table_type.value == "subject":
-            data = (
-                data.with_columns(
+            split_vars = (
+                origin.with_columns(
                     pl.col("variable")
                     .str.split_exact(by="_", n=2)
                     .struct.rename_fields(["table_id", "column_id", "line_id"])
@@ -256,8 +263,8 @@ class APIData(BaseModel):
             )
 
         if self.endpoint.table_type.value == "detailed":
-            data = (
-                data.with_columns(
+            split_vars = (
+                origin.with_columns(
                     pl.col("variable")
                     .str.split_exact(by="_", n=1)
                     .struct.rename_fields(["table_id", "line_id"])
@@ -276,14 +283,16 @@ class APIData(BaseModel):
 
         if self.endpoint.table_type.value in ["unknown", "cprofile"]:
             # TODO flesh this out
-            data = _ensure_column_exists(data, final_vars, "")
+            split_vars = _ensure_column_exists(origin, final_vars, "")
 
         extras = _ensure_column_exists(self._extra, final_vars, "")
-        data = data.select(final_vars)
 
-        data = (
+        # add extras back and enforce column order
+        split_vars = split_vars.select(final_vars)
+
+        output = (
             (
-                pl.concat([data, extras], how="vertical_relaxed")
+                pl.concat([split_vars, extras], how="vertical_relaxed")
                 .with_columns(pl.col(pl.String).replace("", None))
                 .sort("row_id")
             )
@@ -295,7 +304,7 @@ class APIData(BaseModel):
             .sort("row_id")
         )
 
-        return data
+        return output
 
     @computed_field
     @property
@@ -385,23 +394,21 @@ class APIData(BaseModel):
         ]
 
         # all else fails return raw data
-        data = self._raw
+        raw = self._raw
 
-        if len(data) == 2:
-            data = (
-                pl.LazyFrame({"variable": data[0], "value": data[1]})
+        if len(raw) == 2:
+            output = (
+                pl.LazyFrame({"variable": raw[0], "value": raw[1]})
                 .with_columns(date_pulled=dt.now())
                 .join(relevant_variable_labels, how="left", on="variable")
                 .select(final_cols)
             ).with_row_index("row_id")
-        # this ^ returns data which then gets fed into the next if
-        # TODO fix!
 
-        if len(data) > 2:
+        if len(raw) > 2:
             all_frames = []
-            variables = data[0]
+            variables = raw[0]
 
-            for value in data[1:]:
+            for value in raw[1:]:
                 lf = (
                     pl.LazyFrame({"variable": variables, "value": value})
                     .with_columns(date_pulled=dt.now())
@@ -411,9 +418,9 @@ class APIData(BaseModel):
 
             all_frames.append(lf)
 
-            data = pl.concat(all_frames).with_row_index("row_id")
+            output = pl.concat(all_frames).with_row_index("row_id")
 
-        return data
+        return output
 
     @computed_field
     @cached_property
@@ -422,17 +429,15 @@ class APIData(BaseModel):
         Fetches the human-readable variable labels
         as a list and caches it.
         """
-        endpoint = self.endpoint.variable_endpoint
-        data = _get(endpoint, self.endpoint.dataset)
-
+        raw = self._raw
         final_vars = ["variable", "label", "concept", "group", "universe"]
         default_value = "unknown as queried"
 
         # Cherry-picked variables pull down the entire
         # variable catalog as a list with less meta info
-        if isinstance(data, list):
-            data = (
-                pl.from_dicts(data)
+        if isinstance(raw, list):
+            output = (
+                pl.from_dicts(raw)
                 .transpose(column_names="column_0")
                 .lazy()
                 .with_columns(
@@ -445,19 +450,19 @@ class APIData(BaseModel):
 
         # targeted variable endpoint yield more meta info
         # and come back as a dictionary
-        if isinstance(data, dict):
-            data = (
-                pl.from_dicts(data.get("variables"))
+        if isinstance(raw, dict):
+            output = (
+                pl.from_dicts(raw.get("variables"))
                 .with_row_index(name="index")
                 .unpivot(index="index")
                 .lazy()
                 .with_columns(pl.col("value").struct.unnest())
             )
 
-            data = _ensure_column_exists(data, final_vars, default_value)
-            data = data.select(final_vars)
+            output = _ensure_column_exists(output, final_vars, default_value)
+            output = output.select(final_vars)
 
-        return data
+        return output
 
     @computed_field
     @cached_property
@@ -466,12 +471,7 @@ class APIData(BaseModel):
         Fetches the raw data from the API and returns
         it as a list and caches it.
         """
-        endpoint = self.endpoint.full_url
-        dataset = self.endpoint.dataset
-
-        data = _get(endpoint, dataset)
-
-        return data
+        return _get(self.endpoint.full_url, self.endpoint.dataset)
 
     def __repr__(self):
         return (
