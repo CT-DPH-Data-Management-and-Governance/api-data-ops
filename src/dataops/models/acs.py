@@ -393,7 +393,7 @@ class APIData(BaseModel):
                 .with_columns(date_pulled=dt.now())
                 .join(relevant_variable_labels, how="left", on="variable")
                 .select(final_cols)
-            )
+            ).with_row_index("row_id")
 
         if len(data) > 2:
             all_frames = []
@@ -409,9 +409,9 @@ class APIData(BaseModel):
 
             all_frames.append(lf)
 
-            data = pl.concat(all_frames)
+            data = pl.concat(all_frames).with_row_index("row_id")
 
-        return data.with_row_index("row_id")
+        return data
 
     @computed_field
     @cached_property
