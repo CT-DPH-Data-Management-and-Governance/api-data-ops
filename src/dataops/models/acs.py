@@ -195,14 +195,14 @@ class APIData(BaseModel):
             "concept",
             "universe",
             "date_pulled",
-            "table_id",
-            "column_id",
-            "line_id",
             "table_type",
-            "column_number",
+            "table_id",
             "table_subject_id",
             "subject_table_number",
             "table_id_suffix",
+            "column_id",
+            "column_number",
+            "line_id",
             "line_number",
             "line_suffix",
         ]
@@ -256,12 +256,22 @@ class APIData(BaseModel):
                 )
             )
 
-            # TODO test this out
-            extras = _ensure_column_exists(self._extra, final_vars, "")
+        extras = _ensure_column_exists(self._extra, final_vars, "")
+        data = data.select(final_vars)
 
-            data = pl.concat([data, extras]).with_columns(
-                pl.col(pl.String).replace("", None)
+        data = (
+            (
+                pl.concat([data, extras], how="vertical_relaxed")
+                .with_columns(pl.col(pl.String).replace("", None))
+                .sort("row_id")
             )
+            .with_columns(
+                # TODO push this up higher and make how = "vertical"
+                pl.col("line_number").str.to_integer().alias("line_number"),
+                pl.col("column_number").str.to_integer().alias("column_number"),
+            )
+            .sort("row_id")
+        )
 
         return data
 
