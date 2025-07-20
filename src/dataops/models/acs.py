@@ -256,6 +256,10 @@ class APIData(BaseModel):
                 )
             )
 
+        if self.endpoint.table_type.value in ["unknown", "cprofile"]:
+            # TODO flesh this out
+            data = _ensure_column_exists(data, final_vars, "")
+
         extras = _ensure_column_exists(self._extra, final_vars, "")
         data = data.select(final_vars)
 
