@@ -141,8 +141,6 @@ class APIData(BaseModel):
     """
 
     endpoint: Annotated[APIEndpoint, Field(description="Census API endpoint")]
-    # response codes?
-    # raw
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
 
@@ -165,10 +163,10 @@ class APIData(BaseModel):
             .to_list()
         )
 
+    @computed_field
+    @property
     def _label_matrix(self) -> pl.LazyFrame:
-        origin = self._no_extra
-
-        output = origin.select(
+        return self._no_extra.select(
             pl.col("row_id"),
             pl.concat_str(
                 [
@@ -182,8 +180,6 @@ class APIData(BaseModel):
             .alias("exclaim_count"),
             pl.col("label").str.split("!!").alias("label_parts"),
         ).explode("label_parts")
-
-        return output
 
     def _parse_label(self) -> pl.LazyFrame:
         origin = self._no_extra
