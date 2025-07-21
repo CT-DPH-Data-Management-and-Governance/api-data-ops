@@ -16,7 +16,7 @@ from pydantic import (
 from pydantic_settings import SettingsConfigDict
 
 # from dataops.api import _get
-from dataops.models.acs_mixins import APIEndpointMixin, APIDataMixin
+from dataops.models.acs_mixins import APIEndpointMixin, APIDataMixin, APIRequestMixin
 # from dataops._helpers import _ensure_column_exists
 
 # ideas /todoish
@@ -134,7 +134,7 @@ class APIEndpoint(APIEndpointMixin, BaseModel):
             ) from e
 
 
-class APIData(APIDataMixin, BaseModel):
+class APIData(APIRequestMixin, APIDataMixin, BaseModel):
     """
     A Pydantic model to represent the response data
     from the Census Bureau API Endpoint.
