@@ -187,8 +187,18 @@ class APIData(BaseModel):
                 )
             )
         else:
-            # for now
-            output = origin
+            output = origin.with_columns(
+                pl.col("label")
+                .str.count_matches("!!", literal=True)
+                .alias("exclaim_count"),
+            )
+
+            split_denom = output.select(pl.col("exclaim_count")).min().collect().item()
+
+            # TODO need to find some decent logic around handling names etc
+            output = output.with_columns(
+                pl.col("label").str.split_exact("!!", split_denom).alias("parts"),
+            ).unnest("parts")
 
         return output
 
