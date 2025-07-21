@@ -208,7 +208,7 @@ class APIDataMixin:
                     .select(final_cols)
                 )
 
-            all_frames.append(lf)
+                all_frames.append(lf)
 
             output = pl.concat(all_frames).with_row_index("row_id")
 
