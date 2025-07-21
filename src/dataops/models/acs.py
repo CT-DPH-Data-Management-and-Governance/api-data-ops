@@ -216,6 +216,26 @@ class APIData(BaseModel):
 
         return output
 
+    @computed_field
+    @property
+    def _vars_matrix(self) -> pl.LazyFrame:
+        final_vars = [
+            "row_id",
+            "variable",
+            "table_type",
+            "table_id",
+            "table_subject_id",
+            "subject_table_number",
+            "table_id_suffix",
+            "column_id",
+            "column_number",
+            "line_id",
+            "line_number",
+            "line_suffix",
+        ]
+
+        return self._parse_vars().select(final_vars)
+
     def _parse_vars(self) -> pl.LazyFrame:
         """
         Parse all the information/ metadata from the variable
