@@ -1,8 +1,8 @@
-from enum import Enum
-from typing import Any
-from functools import cached_property
-
 from datetime import datetime as dt
+from enum import Enum
+from functools import cached_property
+from typing import Any
+
 import polars as pl
 import requests
 from pydantic import (
@@ -11,9 +11,9 @@ from pydantic import (
     model_validator,
 )
 
+from dataops._helpers import _ensure_column_exists
 from dataops.api import _get
 from dataops.models import settings
-from dataops._helpers import _ensure_column_exists
 
 
 class TableType(str, Enum):

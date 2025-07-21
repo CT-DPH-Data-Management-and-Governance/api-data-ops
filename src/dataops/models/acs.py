@@ -1,8 +1,6 @@
 from typing import Annotated, List
 from urllib.parse import parse_qs, urlparse
-# from functools import cached_property
 
-# from datetime import datetime as dt
 import polars as pl
 from pydantic import (
     BaseModel,
@@ -10,17 +8,10 @@ from pydantic import (
     HttpUrl,
     SecretStr,
     ValidationError,
-    # computed_field,
 )
-
 from pydantic_settings import SettingsConfigDict
 
-# from dataops.api import _get
-from dataops.models.acs_mixins import APIEndpointMixin, APIDataMixin, APIRequestMixin
-# from dataops._helpers import _ensure_column_exists
-
-# ideas /todoish
-# class APIVariable():
+from dataops.models.acs_mixins import APIDataMixin, APIEndpointMixin, APIRequestMixin
 
 
 class APIEndpoint(APIEndpointMixin, BaseModel):
