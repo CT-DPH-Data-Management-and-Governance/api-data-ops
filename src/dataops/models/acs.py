@@ -147,7 +147,7 @@ class APIData(BaseModel):
     @computed_field
     @cached_property
     def concept(self) -> str:
-        """Endpoint ACS Concept"""
+        """Endpoint ACS Concept as assigned by the Census"""
 
         return (
             self._lazyframe.with_columns(
@@ -166,6 +166,14 @@ class APIData(BaseModel):
     @computed_field
     @property
     def _label_matrix(self) -> pl.LazyFrame:
+        """
+        Generate a polars LazyFrame with the census data labels
+        split out by their '!!' delimiter into a long table
+        format, regardless of how many '!!' there were in a
+        label.  `row_id` is preserved from the original
+        lazyframe of data so this can always be joined back.
+        """
+
         return self._no_extra.select(
             pl.col("row_id"),
             pl.concat_str(
@@ -182,6 +190,19 @@ class APIData(BaseModel):
         ).explode("label_parts")
 
     def _parse_label(self) -> pl.LazyFrame:
+        """
+        Parse the label variable and generate columns based
+        on commonly included parts. NULLs fill in when
+        there is no data in that type. Up to 3 '!!' delimeters
+        are split and any more text is captured in the
+        catch-all `label_end` column.
+
+        This should be more than enough for B Tables - please
+        note that subject tables will often have more, and the
+        parts may not follow the same format because they refer
+        to the nesting of tables. For detailed parsing of
+        subject tables, please see _label_matrix().
+        """
         origin = self._no_extra
 
         common_label_parts = [
@@ -435,7 +456,7 @@ class APIData(BaseModel):
             "date_pulled",
         ]
 
-        # all else fails return raw data
+        output = pl.LazyFrame()
         raw = self._raw
 
         if len(raw) == 2:
