@@ -121,98 +121,123 @@ class APIEndpointMixin:
 
 
 class APIDataMixin:
-    """A mixin to add methods to APIData."""
+    """A mixin to add data wrangling methods to APIData."""
 
+    # part of repr
     @computed_field
-    @property
-    def _label_matrix(self) -> pl.LazyFrame:
-        """
-        Generate a polars LazyFrame with the census data labels
-        split out by their '!!' delimiter into a long table
-        format, regardless of how many '!!' there were in a
-        label.  `row_id` is preserved from the original
-        lazyframe of data so this can always be joined back.
-        """
+    @cached_property
+    def concept(self) -> str:
+        """Endpoint ACS Concept as assigned by the Census"""
 
-        return self._no_extra.select(
-            pl.col("row_id"),
-            pl.concat_str(
-                [
-                    pl.col("label").str.head(10),
-                    pl.lit("..."),
-                    pl.col("label").str.tail(10),
-                ]
-            ).alias("trunc_orig_label"),
-            pl.col("label")
-            .str.count_matches("!!", literal=True)
-            .alias("exclaim_count"),
-            pl.col("label").str.split("!!").alias("label_parts"),
-        ).explode("label_parts")
-
-    def _parse_label(self) -> pl.LazyFrame:
-        """
-        Parse the label variable and generate columns based
-        on commonly included parts. NULLs fill in when
-        there is no data in that type. Up to 3 '!!' delimeters
-        are split and any more text is captured in the
-        catch-all `label_end` column.
-
-        This should be more than enough for B Tables - please
-        note that subject tables will often have more, and the
-        parts may not follow the same format because they refer
-        to the nesting of tables. For detailed parsing of
-        subject tables, please see _label_matrix().
-        """
-        origin = self._no_extra
-
-        common_label_parts = [
-            "label_line_type",
-            "label_concept_base",
-            "label_stratifier",
-            "label_end",
-        ]
-
-        output = (
-            origin.with_columns(
-                pl.col("label")
-                .str.count_matches("!!", literal=True)
-                .alias("exclaim_count"),
-                pl.col("label")
-                .str.split_exact("!!", 3)
-                .struct.rename_fields(common_label_parts)
-                .alias("parts"),
+        return (
+            self._lazyframe.with_columns(
+                pl.col("variable").str.split("_").list.first().alias("first")
             )
-            .unnest("parts")
+            .filter(pl.col("first").eq(pl.col("group")))
+            .select(pl.col("concept"))
+            .unique()
+            .drop_nulls()
+            .select(pl.col("concept").implode())
+            .collect()
+            .item()
+            .to_list()
+        )
+
+    # core lazyframe-based
+    @computed_field
+    @cached_property
+    def _lazyframe(self) -> pl.LazyFrame:
+        """
+        Return a "non-tidy" polars LazyFrame of the
+        API Endpoint data with the human-readable
+        variable labels.
+        """
+
+        # ensure you have the right variables
+        endpoint_vars = (
+            pl.LazyFrame({"vars": self.endpoint.variables})
             .with_columns(
-                pl.col(common_label_parts)
-                .str.replace_all(r"--|:", "")
+                pl.col("vars")
+                .str.replace_all("\\(|\\)", " ")
                 .str.strip_chars()
-                .str.to_lowercase()
+                .str.split(by=" ")
+            )
+            .select("vars")
+            .collect()
+            .explode("vars")
+            .lazy()
+            .with_columns(
+                pl.col("vars").str.split("_").list.first().alias("group"),
             )
         )
+
+        relevant_variable_labels = self._var_labels.join(
+            endpoint_vars, how="inner", on="group"
+        )
+
+        final_cols = [
+            "variable",
+            "group",
+            "value",
+            "label",
+            "concept",
+            "universe",
+            "date_pulled",
+        ]
+
+        output = pl.LazyFrame()
+        raw = self._raw
+
+        if len(raw) == 2:
+            output = (
+                pl.LazyFrame({"variable": raw[0], "value": raw[1]})
+                .with_columns(date_pulled=dt.now())
+                .join(relevant_variable_labels, how="left", on="variable")
+                .select(final_cols)
+            ).with_row_index("row_id")
+
+        if len(raw) > 2:
+            all_frames = []
+            variables = raw[0]
+
+            for value in raw[1:]:
+                lf = (
+                    pl.LazyFrame({"variable": variables, "value": value})
+                    .with_columns(date_pulled=dt.now())
+                    .join(relevant_variable_labels, how="left", on="variable")
+                    .select(final_cols)
+                )
+
+            all_frames.append(lf)
+
+            output = pl.concat(all_frames).with_row_index("row_id")
 
         return output
 
     @computed_field
     @property
-    def _vars_matrix(self) -> pl.LazyFrame:
-        final_vars = [
-            "row_id",
-            "variable",
-            "table_type",
-            "table_id",
-            "table_subject_id",
-            "subject_table_number",
-            "table_id_suffix",
-            "column_id",
-            "column_number",
-            "line_id",
-            "line_number",
-            "line_suffix",
-        ]
+    def _extra(self) -> pl.LazyFrame:
+        """
+        Returns the extra, often metadata or
+        geography-related rows from the LazyFrame.
+        """
+        return self._lazyframe.filter(
+            (~pl.col("variable").str.starts_with(pl.col("group")))
+            | (pl.col("group").is_null())
+        )
 
-        return self._parse_vars().select(final_vars)
+    @computed_field
+    @property
+    def _no_extra(self) -> pl.LazyFrame:
+        """
+        Returns the LazyFrame sans extra rows like metadata
+        or geography-related rows from the LazyFrame, preserves
+        original row_ids.
+        """
 
+        return self._lazyframe.join(self._extra, on="row_id", how="anti")
+
+    # variables
     def _parse_vars(self) -> pl.LazyFrame:
         """
         Parse all the information/ metadata from the variable
@@ -331,72 +356,25 @@ class APIDataMixin:
 
     @computed_field
     @property
-    def _extra(self) -> pl.LazyFrame:
-        """
-        Returns the extra, often metadata or
-        geography-related rows from the LazyFrame.
-        """
-        return self._lazyframe.filter(
-            (~pl.col("variable").str.starts_with(pl.col("group")))
-            | (pl.col("group").is_null())
-        )
+    def _vars_matrix(self) -> pl.LazyFrame:
+        final_vars = [
+            "row_id",
+            "variable",
+            "table_type",
+            "table_id",
+            "table_subject_id",
+            "subject_table_number",
+            "table_id_suffix",
+            "column_id",
+            "column_number",
+            "line_id",
+            "line_number",
+            "line_suffix",
+        ]
 
-    @computed_field
-    @property
-    def _no_extra(self) -> pl.LazyFrame:
-        """
-        Returns the LazyFrame sans extra rows like metadata
-        or geography-related rows from the LazyFrame, preserves
-        original row_ids.
-        """
+        return self._parse_vars().select(final_vars)
 
-        return self._lazyframe.join(self._extra, on="row_id", how="anti")
-
-    @computed_field
-    @cached_property
-    def concept(self) -> str:
-        """Endpoint ACS Concept as assigned by the Census"""
-
-        return (
-            self._lazyframe.with_columns(
-                pl.col("variable").str.split("_").list.first().alias("first")
-            )
-            .filter(pl.col("first").eq(pl.col("group")))
-            .select(pl.col("concept"))
-            .unique()
-            .drop_nulls()
-            .select(pl.col("concept").implode())
-            .collect()
-            .item()
-            .to_list()
-        )
-
-    @computed_field
-    @property
-    def _label_matrix(self) -> pl.LazyFrame:
-        """
-        Generate a polars LazyFrame with the census data labels
-        split out by their '!!' delimiter into a long table
-        format, regardless of how many '!!' there were in a
-        label.  `row_id` is preserved from the original
-        lazyframe of data so this can always be joined back.
-        """
-
-        return self._no_extra.select(
-            pl.col("row_id"),
-            pl.concat_str(
-                [
-                    pl.col("label").str.head(10),
-                    pl.lit("..."),
-                    pl.col("label").str.tail(10),
-                ]
-            ).alias("trunc_orig_label"),
-            pl.col("label")
-            .str.count_matches("!!", literal=True)
-            .alias("exclaim_count"),
-            pl.col("label").str.split("!!").alias("label_parts"),
-        ).explode("label_parts")
-
+    # labels
     def _parse_label(self) -> pl.LazyFrame:
         """
         Parse the label variable and generate columns based
@@ -443,6 +421,31 @@ class APIDataMixin:
 
     @computed_field
     @property
+    def _label_matrix(self) -> pl.LazyFrame:
+        """
+        Generate a polars LazyFrame with the census data labels
+        split out by their '!!' delimiter into a long table
+        format, regardless of how many '!!' there were in a
+        label.  `row_id` is preserved from the original
+        lazyframe of data so this can always be joined back.
+        """
+
+        return self._no_extra.select(
+            pl.col("row_id"),
+            pl.concat_str(
+                [
+                    pl.col("label").str.head(10),
+                    pl.lit("..."),
+                    pl.col("label").str.tail(10),
+                ]
+            ).alias("trunc_orig_label"),
+            pl.col("label")
+            .str.count_matches("!!", literal=True)
+            .alias("exclaim_count"),
+            pl.col("label").str.split("!!").alias("label_parts"),
+        ).explode("label_parts")
+
+
 class APIRequestMixin:
     """A mixin for adding the API request methods to APIData."""
 
