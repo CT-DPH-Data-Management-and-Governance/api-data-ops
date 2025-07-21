@@ -1,8 +1,6 @@
 from typing import Annotated, List
 from urllib.parse import parse_qs, urlparse
-from functools import cached_property
 
-from datetime import datetime as dt
 import polars as pl
 from pydantic import (
     BaseModel,
@@ -10,17 +8,10 @@ from pydantic import (
     HttpUrl,
     SecretStr,
     ValidationError,
-    computed_field,
 )
-
 from pydantic_settings import SettingsConfigDict
 
-from dataops.api import _get
-from dataops.models.acs_mixins import APIEndpointMixin
-from dataops._helpers import _ensure_column_exists
-
-# ideas /todoish
-# class APIVariable():
+from dataops.models.acs_mixins import APIDataMixin, APIEndpointMixin, APIRequestMixin
 
 
 class APIEndpoint(APIEndpointMixin, BaseModel):
@@ -134,51 +125,15 @@ class APIEndpoint(APIEndpointMixin, BaseModel):
             ) from e
 
 
-class APIData(BaseModel):
+class APIData(APIRequestMixin, APIDataMixin, BaseModel):
     """
     A Pydantic model to represent the response data
     from the Census Bureau API Endpoint.
     """
 
     endpoint: Annotated[APIEndpoint, Field(description="Census API endpoint")]
-    # response codes?
-    # raw
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
-
-    @computed_field
-    @cached_property
-    def concept(self) -> str:
-        """Endpoint ACS Concept"""
-
-        return (
-            self._lazyframe.with_columns(
-                pl.col("variable").str.split("_").list.first().alias("first")
-            )
-            .filter(pl.col("first").eq(pl.col("group")))
-            .select(pl.col("concept"))
-            .unique()
-            .drop_nulls()
-            .select(pl.col("concept").implode())
-            .collect()
-            .item()
-            .to_list()
-        )
-
-    def _var_parse(self) -> pl.LazyFrame:
-        pass
-
-    @computed_field
-    @property
-    def _extra(self) -> pl.LazyFrame:
-        """
-        Return the extra, often metadata or
-        geography-related rows from the LazyFrame.
-        """
-        return self._lazyframe.filter(
-            (~pl.col("variable").str.starts_with(pl.col("group")))
-            | (pl.col("group").is_null())
-        )
 
     def fetch_tidyframe(self) -> pl.DataFrame:
         """
@@ -202,134 +157,6 @@ class APIData(BaseModel):
         )
 
         return no_extras
-
-    @computed_field
-    @cached_property
-    def _lazyframe(self) -> pl.LazyFrame:
-        """
-        Return a "non-tidy" polars LazyFrame of the
-        API Endpoint data with the human-readable
-        variable labels.
-        """
-
-        # ensure you have the right variables
-        endpoint_vars = (
-            pl.LazyFrame({"vars": self.endpoint.variables})
-            .with_columns(
-                pl.col("vars")
-                .str.replace_all("\\(|\\)", " ")
-                .str.strip_chars()
-                .str.split(by=" ")
-            )
-            .select("vars")
-            .collect()
-            .explode("vars")
-            .lazy()
-            .with_columns(
-                pl.col("vars").str.split("_").list.first().alias("group"),
-            )
-        )
-
-        relevant_variable_labels = self._var_labels.join(
-            endpoint_vars, how="inner", on="group"
-        )
-
-        final_cols = [
-            "variable",
-            "group",
-            "value",
-            "label",
-            "concept",
-            "universe",
-            "date_pulled",
-        ]
-
-        # all else fails return raw data
-        data = self._raw
-
-        if len(data) == 2:
-            data = (
-                pl.LazyFrame({"variable": data[0], "value": data[1]})
-                .with_columns(date_pulled=dt.now())
-                .join(relevant_variable_labels, how="left", on="variable")
-                .select(final_cols)
-            )
-
-        if len(data) > 2:
-            all_frames = []
-            variables = data[0]
-
-            for value in data[1:]:
-                lf = (
-                    pl.LazyFrame({"variable": variables, "value": value})
-                    .with_columns(date_pulled=dt.now())
-                    .join(relevant_variable_labels, how="left", on="variable")
-                    .select(final_cols)
-                )
-
-            all_frames.append(lf)
-
-            data = pl.concat(all_frames)
-
-        return data.with_row_index("row_id")
-
-    @computed_field
-    @cached_property
-    def _var_labels(self) -> pl.LazyFrame:
-        """
-        Fetches the human-readable variable labels
-        as a list and caches it.
-        """
-        endpoint = self.endpoint.variable_endpoint
-        data = _get(endpoint, self.endpoint.dataset)
-
-        final_vars = ["variable", "label", "concept", "group", "universe"]
-        default_value = "unknown as queried"
-
-        # Cherry-picked variables pull down the entire
-        # variable catalog as a list with less meta info
-        if isinstance(data, list):
-            data = (
-                pl.from_dicts(data)
-                .transpose(column_names="column_0")
-                .lazy()
-                .with_columns(
-                    pl.col("name").alias("variable"),
-                    pl.col("name").str.split("_").list.first().alias("group"),
-                    pl.lit(default_value).alias("universe"),
-                )
-                .select(final_vars)
-            )
-
-        # targeted variable endpoint yield more meta info
-        # and come back as a dictionary
-        if isinstance(data, dict):
-            data = (
-                pl.from_dicts(data.get("variables"))
-                .with_row_index(name="index")
-                .unpivot(index="index")
-                .lazy()
-                .with_columns(pl.col("value").struct.unnest())
-            )
-
-            data = _ensure_column_exists(data, final_vars, default_value)
-            data = data.select(final_vars)
-
-        return data
-
-    @computed_field
-    @cached_property
-    def _raw(self) -> list[str]:
-        """
-        Fetches the raw data from the API and returns
-        it as a list and caches it.
-        """
-        endpoint = self.endpoint.full_url
-        dataset = self.endpoint.dataset
-
-        data = _get(endpoint, dataset)
-
-        return data
 
     def __repr__(self):
         return (
