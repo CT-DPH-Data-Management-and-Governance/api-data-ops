@@ -165,6 +165,26 @@ class APIData(BaseModel):
             .to_list()
         )
 
+    def _label_matrix(self) -> pl.LazyFrame:
+        origin = self._no_extra
+
+        output = origin.select(
+            pl.col("row_id"),
+            pl.concat_str(
+                [
+                    pl.col("label").str.head(10),
+                    pl.lit("..."),
+                    pl.col("label").str.tail(10),
+                ]
+            ).alias("trunc_orig_label"),
+            pl.col("label")
+            .str.count_matches("!!", literal=True)
+            .alias("exclaim_count"),
+            pl.col("label").str.split("!!").alias("label_parts"),
+        ).explode("label_parts")
+
+        return output
+
     def _parse_label(self) -> pl.LazyFrame:
         origin = self._no_extra
 
