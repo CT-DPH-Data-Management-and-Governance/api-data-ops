@@ -168,37 +168,31 @@ class APIData(BaseModel):
     def _parse_label(self) -> pl.LazyFrame:
         origin = self._no_extra
 
-        if self.endpoint.table_type.value == "detailed":
-            b_table_parts = ["line_type", "concept_base", "stratifier"]
+        common_label_parts = [
+            "label_line_type",
+            "label_concept_base",
+            "label_stratifier",
+            "label_end",
+        ]
 
-            output = (
-                origin.with_columns(
-                    pl.col("label")
-                    .str.split_exact("!!", 2)
-                    .struct.rename_fields(b_table_parts)
-                    .alias("parts")
-                )
-                .unnest("parts")
-                .with_columns(
-                    pl.col(b_table_parts)
-                    .str.replace_all(r"--|:", "")
-                    .str.strip_chars()
-                    .str.to_lowercase()
-                )
-            )
-        else:
-            output = origin.with_columns(
+        output = (
+            origin.with_columns(
                 pl.col("label")
                 .str.count_matches("!!", literal=True)
                 .alias("exclaim_count"),
+                pl.col("label")
+                .str.split_exact("!!", 3)
+                .struct.rename_fields(common_label_parts)
+                .alias("parts"),
             )
-
-            split_denom = output.select(pl.col("exclaim_count")).min().collect().item()
-
-            # TODO need to find some decent logic around handling names etc
-            output = output.with_columns(
-                pl.col("label").str.split_exact("!!", split_denom).alias("parts"),
-            ).unnest("parts")
+            .unnest("parts")
+            .with_columns(
+                pl.col(common_label_parts)
+                .str.replace_all(r"--|:", "")
+                .str.strip_chars()
+                .str.to_lowercase()
+            )
+        )
 
         return output
 
