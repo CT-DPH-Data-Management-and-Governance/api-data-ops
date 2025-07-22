@@ -212,7 +212,7 @@ class APIDataMixin:
 
             output = pl.concat(all_frames).with_row_index("row_id")
 
-        return output
+        return output.collect().lazy()
 
     @computed_field
     @property
@@ -491,7 +491,7 @@ class APIRequestMixin:
             output = _ensure_column_exists(output, final_vars, default_value)
             output = output.select(final_vars)
 
-        return output
+        return output.collect().lazy()
 
     @computed_field
     @cached_property
