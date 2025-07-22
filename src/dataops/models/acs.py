@@ -148,12 +148,17 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             pl.DataFrame: A tidy Polars DataFrame with the processed data.
         """
         geos = self.endpoint.geography
+        year = self.endpoint.year
 
         no_extras = (
             self._lazyframe.join(self._extra, on="row_id", how="anti")
             .with_columns(pl.lit(geos).alias("geography"))
             .drop("row_id")
-            .with_row_index("row_id")
+            .with_row_index("row_id", offset=1)
+            .with_columns(
+                pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
+                pl.lit(year).alias("year"),
+            )
         )
 
         return no_extras
