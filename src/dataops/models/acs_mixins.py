@@ -126,7 +126,7 @@ class APIDataMixin:
     # part of repr
     @computed_field
     @cached_property
-    def concept(self) -> str:
+    def concept(self) -> list[str]:
         """Endpoint ACS Concept as assigned by the Census"""
 
         return (
