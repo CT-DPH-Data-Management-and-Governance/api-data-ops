@@ -149,16 +149,40 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         """
         geos = self.endpoint.geography
         year = self.endpoint.year
+        endpoint = self.endpoint.url_no_key
 
-        no_extras = (
-            self._lazyframe.join(self._extra, on="row_id", how="anti")
-            .with_columns(pl.lit(geos).alias("geography"))
-            .drop("row_id")
-            .with_row_index("row_id", offset=1)
-            .with_columns(
-                pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
-                pl.lit(year).alias("year"),
-            )
+        no_extras = self._no_extra.with_columns(
+            pl.lit(geos).alias("geography"),
+            pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
+            pl.lit(year).alias("year"),
+            pl.lit(endpoint).alias("year"),
+        )
+
+        parsed_labels = self._parse_label().select(
+            [
+                "row_id",
+                "exclaim_count",
+                "label_line_type",
+                "label_concept_base",
+                "label_stratifier",
+                "label_end",
+            ]
+        )
+
+        parsed_vars = self._parse_vars().select(
+            [
+                "row_id",
+                "table_type",
+                "table_id",
+                "table_subject_id",
+                "subject_table_number",
+                "table_id_suffix",
+                "column_id",
+                "column_number",
+                "line_id",
+                "line_number",
+                "line_suffix",
+            ]
         )
 
         return no_extras
