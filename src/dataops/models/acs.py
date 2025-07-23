@@ -155,7 +155,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             pl.lit(geos).alias("geography"),
             pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
             pl.lit(year).alias("year"),
-            pl.lit(endpoint).alias("year"),
+            pl.lit(endpoint).alias("endpoint"),
         )
 
         parsed_labels = self._parse_label().select(
@@ -185,7 +185,11 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             ]
         )
 
-        return no_extras
+        joined_up = no_extras.join(parsed_labels, how="left", on="row_id").join(
+            parsed_vars, how="left", on="row_id"
+        )
+
+        return joined_up
 
     def __repr__(self):
         return (
