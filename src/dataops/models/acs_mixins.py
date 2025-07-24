@@ -176,6 +176,8 @@ class APIDataMixin:
         )
 
         final_cols = [
+            "row_id",
+            "stratifier_id",
             "variable",
             "group",
             "value",
@@ -188,29 +190,21 @@ class APIDataMixin:
         output = pl.LazyFrame()
         raw = self._raw
 
-        if len(raw) == 2:
-            output = (
-                pl.LazyFrame({"variable": raw[0], "value": raw[1]})
-                .with_columns(date_pulled=dt.now())
-                .join(relevant_variable_labels, how="left", on="variable")
-                .select(final_cols)
-            ).with_row_index("row_id")
+        # start wide to accomadate any kind of endpoint
+        # add a stratifier id to accomadate any kind of strat/geo etc...
+        # then unpivot to longer for easy joins.
 
-        if len(raw) > 2:
-            all_frames = []
-            variables = raw[0]
-
-            for value in raw[1:]:
-                lf = (
-                    pl.LazyFrame({"variable": variables, "value": value})
-                    .with_columns(date_pulled=dt.now())
-                    .join(relevant_variable_labels, how="left", on="variable")
-                    .select(final_cols)
-                )
-
-                all_frames.append(lf)
-
-            output = pl.concat(all_frames).with_row_index("row_id")
+        output = (
+            pl.LazyFrame(data=raw[1:], schema=raw[0], orient="row")
+            .with_row_index(name="stratifier_id")
+            .unpivot(
+                index="stratifier_id", value_name="value", variable_name="variable"
+            )
+            .join(relevant_variable_labels, how="left", on="variable")
+            .with_row_index("row_id")
+            .with_columns(date_pulled=dt.now())
+            .select(final_cols)
+        )
 
         return output.collect().lazy()
 
