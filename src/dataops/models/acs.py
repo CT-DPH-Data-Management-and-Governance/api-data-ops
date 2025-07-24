@@ -135,6 +135,13 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
 
+    def tidy_wide(self) -> pl.DataFrame:
+        """
+        generate a tidy wide table
+
+        """
+        pass
+
     def standard_parse(self) -> pl.LazyFrame:
         """
         Generate a tidy Polars DataFrame by removing extra rows and adding
