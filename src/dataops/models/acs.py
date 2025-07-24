@@ -196,9 +196,40 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             .filter(pl.col("table_type").is_not_null())
         )
 
+        order = [
+            "row_id",
+            "endpoint",
+            "year",
+            "variable",
+            "group",
+            "label",
+            "concept",
+            "universe",
+            "url_geography",
+            "value",
+            "value_numeric",
+            "exclaim_count",
+            "label_line_type",
+            "label_concept_base",
+            "label_stratifier",
+            "label_end",
+            "table_type",
+            "table_id",
+            "table_subject_id",
+            "subject_table_number",
+            "table_id_suffix",
+            "column_id",
+            "column_number",
+            "line_id",
+            "line_number",
+            "line_suffix",
+            "date_pulled",
+        ]
+
         output = (
             content.join(parsed_labels, how="left", on="row_id")
             .join(parsed_vars, how="left", on="row_id")
+            .select(order)
             .collect()
             .lazy()
         )
