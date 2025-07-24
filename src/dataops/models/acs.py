@@ -135,7 +135,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
 
-    def fetch_tidyframe(self) -> pl.DataFrame:
+    def standard_parse(self) -> pl.LazyFrame:
         """
         Generate a tidy Polars DataFrame by removing extra rows and adding
         geography information.
@@ -151,8 +151,8 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         year = self.endpoint.year
         endpoint = self.endpoint.url_no_key
 
-        no_extras = self._no_extra.with_columns(
-            pl.lit(geos).alias("geography"),
+        content = self._lazyframe.with_columns(
+            pl.lit(geos).alias("url_geography"),
             pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
             pl.lit(year).alias("year"),
             pl.lit(endpoint).alias("endpoint"),
@@ -169,27 +169,34 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             ]
         )
 
-        parsed_vars = self._parse_vars().select(
-            [
-                "row_id",
-                "table_type",
-                "table_id",
-                "table_subject_id",
-                "subject_table_number",
-                "table_id_suffix",
-                "column_id",
-                "column_number",
-                "line_id",
-                "line_number",
-                "line_suffix",
-            ]
+        parsed_vars = (
+            self._parse_vars()
+            .select(
+                [
+                    "row_id",
+                    "table_type",
+                    "table_id",
+                    "table_subject_id",
+                    "subject_table_number",
+                    "table_id_suffix",
+                    "column_id",
+                    "column_number",
+                    "line_id",
+                    "line_number",
+                    "line_suffix",
+                ]
+            )
+            .filter(pl.col("table_type").is_not_null())
         )
 
-        joined_up = no_extras.join(parsed_labels, how="left", on="row_id").join(
-            parsed_vars, how="left", on="row_id"
+        output = (
+            content.join(parsed_labels, how="left", on="row_id")
+            .join(parsed_vars, how="left", on="row_id")
+            .collect()
+            .lazy()
         )
 
-        return joined_up
+        return output
 
     def __repr__(self):
         return (
