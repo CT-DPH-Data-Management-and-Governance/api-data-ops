@@ -154,11 +154,27 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                     "endpoint",
                     "universe",
                     "label_concept_base",
+                    "label_stratifier",
+                    "label_end",
                 ]
             )
             .drop_nulls()
             .unique()
-            .rename({"label_concept_base": "concept"})
+            .fill_null("")
+            .select(
+                pl.col("stratifier_id"),
+                pl.col("endpoint"),
+                pl.col("universe"),
+                pl.concat_str(
+                    [
+                        pl.col("label_concept_base"),
+                        pl.lit(": "),
+                        pl.col("label_stratifier"),
+                        pl.lit(" - "),
+                        pl.col("label_end"),
+                    ]
+                ).alias("measure"),
+            )
         )
 
         date_pulled = (
@@ -180,6 +196,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 .alias("col_names")
             )
             .select(["col_names", "stratifier_id", "value"])
+            .unique()
             .collect()
             .pivot(on="col_names", index="stratifier_id", values="value")
             .lazy()
@@ -190,9 +207,8 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 labels.join(content, on="stratifier_id")
                 .drop("stratifier_id")
                 .with_columns(pl.lit(date_pulled).alias("date_pulled"))
-            )
-            .collect()
-            .lazy()
+            ).collect()
+            # .lazy()
         )
 
         return output
