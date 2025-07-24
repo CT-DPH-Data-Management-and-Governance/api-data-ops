@@ -165,45 +165,59 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         year = self.endpoint.year
         endpoint = self.endpoint.url_no_key
 
-        content = self._lazyframe.with_columns(
-            pl.lit(geos).alias("url_geography"),
-            pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
-            pl.lit(year).alias("year"),
-            pl.lit(endpoint).alias("endpoint"),
+        content = (
+            self._lazyframe.with_columns(
+                pl.lit(geos).alias("url_geography"),
+                pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
+                pl.lit(year).alias("year"),
+                pl.lit(endpoint).alias("endpoint"),
+            )
+            .collect()
+            .lazy()
         )
 
-        parsed_labels = self._parse_label().select(
-            [
-                "row_id",
-                "exclaim_count",
-                "label_line_type",
-                "label_concept_base",
-                "label_stratifier",
-                "label_end",
-            ]
-        )
-
-        parsed_vars = (
-            self._parse_vars()
+        parsed_labels = (
+            self._parse_label()
             .select(
                 [
                     "row_id",
-                    "table_type",
-                    "table_id",
-                    "table_subject_id",
-                    "subject_table_number",
-                    "table_id_suffix",
-                    "column_id",
-                    "column_number",
-                    "line_id",
-                    "line_number",
-                    "line_suffix",
+                    "exclaim_count",
+                    "label_line_type",
+                    "label_concept_base",
+                    "label_stratifier",
+                    "label_end",
                 ]
             )
-            .filter(pl.col("table_type").is_not_null())
+            .collect()
+            .lazy()
+        )
+
+        parsed_vars = (
+            (
+                self._parse_vars()
+                .select(
+                    [
+                        "row_id",
+                        "table_type",
+                        "table_id",
+                        "table_subject_id",
+                        "subject_table_number",
+                        "table_id_suffix",
+                        "column_id",
+                        "column_number",
+                        "line_id",
+                        "line_number",
+                        "line_suffix",
+                    ]
+                )
+                .filter(pl.col("table_type").is_not_null())
+            )
+            .collect()
+            .lazy()
         )
 
         order = [
+            "stratifier_id",
             "row_id",
             "endpoint",
             "year",
