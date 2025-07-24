@@ -146,8 +146,18 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         generate a wide table
 
         """
+        self.standard_parse().select(
+            [
+                "stratifier_id",
+                "endpoint",
+                "concept",
+                "universe",
+            ]
+        ).drop_nulls().unique()
 
-        pass
+        self.standard_parse().pivot(
+            on="label_line_type", index="stratifier_id", values="value"
+        )
 
     def standard_parse(self) -> pl.LazyFrame:
         """
