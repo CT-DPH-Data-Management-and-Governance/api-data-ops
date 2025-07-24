@@ -146,25 +146,49 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         generate a wide table
 
         """
-        labels = (
+        # TODO split up labels
+        # I want human-readable measure labels
+        # I want to dyanmically capture names of the stratifiers and their cols
+
+        # ------static ------------- | dynamic -----------#
+        # endpoint
+
+        # the row content that will be repeated by "measure" like town by
+        # total european pop with E, EA, M, and MA cols
+
+        static_stratifier_cols = (
+            self._extra.select("variable").unique().collect().to_series().to_list()
+        )
+
+        # consider dropping id - and just join to every row at end?
+        static_meta_cols = (
             self.standard_parse()
             .select(
                 [
                     "stratifier_id",
                     "endpoint",
                     "universe",
+                ]
+            )
+            .drop_nulls()
+            .unique()
+        )
+
+        human_var_labels = (
+            self.standard_parse()
+            .select(
+                [
+                    "variable",
                     "label_concept_base",
                     "label_stratifier",
                     "label_end",
                 ]
             )
-            .drop_nulls()
+            .filter(~pl.col("variable").is_in(static_stratifier_cols))
             .unique()
             .fill_null("")
             .select(
-                pl.col("stratifier_id"),
-                pl.col("endpoint"),
-                pl.col("universe"),
+                pl.col("variable"),
                 pl.concat_str(
                     [
                         pl.col("label_concept_base"),
@@ -173,8 +197,22 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                         pl.lit(" - "),
                         pl.col("label_end"),
                     ]
-                ).alias("measure"),
+                )
+                .str.strip_chars()
+                .alias("measure"),
             )
+        ).collect()
+
+        new_content = (
+            self.standard_parse()
+            .select(["stratifier_id", "label_line_type", "variable", "value"])
+            .collect()
+            .join(human_var_labels, on="variable")
+            .drop("variable")
+            .unique()
+            .pivot(on="label_line_type", values="value")
+            # .unique()
+            # .collect()
         )
 
         date_pulled = (
@@ -196,7 +234,6 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 .alias("col_names")
             )
             .select(["col_names", "stratifier_id", "value"])
-            .unique()
             .collect()
             .pivot(on="col_names", index="stratifier_id", values="value")
             .lazy()
