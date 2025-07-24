@@ -141,23 +141,61 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
     def long(self) -> pl.DataFrame:
         pass
 
-    def wide(self) -> pl.DataFrame:
+    def wide(self) -> pl.LazyFrame:
         """
         generate a wide table
 
         """
-        self.standard_parse().select(
-            [
-                "stratifier_id",
-                "endpoint",
-                "concept",
-                "universe",
-            ]
-        ).drop_nulls().unique()
-
-        self.standard_parse().pivot(
-            on="label_line_type", index="stratifier_id", values="value"
+        labels = (
+            self.standard_parse()
+            .select(
+                [
+                    "stratifier_id",
+                    "endpoint",
+                    "universe",
+                    "label_concept_base",
+                ]
+            )
+            .drop_nulls()
+            .unique()
+            .rename({"label_concept_base": "concept"})
         )
+
+        date_pulled = (
+            self.standard_parse().select("date_pulled").unique().collect().item()
+        )
+
+        content = (
+            self.standard_parse()
+            .with_columns(
+                pl.when(
+                    pl.col("label_line_type").is_null().and_(pl.col("label").is_null())
+                )
+                .then(pl.col("variable"))
+                .when(pl.col("label_line_type").is_null())
+                .then(pl.col("label"))
+                .otherwise(pl.col("label_line_type"))
+                .str.to_lowercase()
+                .str.replace_all(" ", "_")
+                .alias("col_names")
+            )
+            .select(["col_names", "stratifier_id", "value"])
+            .collect()
+            .pivot(on="col_names", index="stratifier_id", values="value")
+            .lazy()
+        )
+
+        output = (
+            (
+                labels.join(content, on="stratifier_id")
+                .drop("stratifier_id")
+                .with_columns(pl.lit(date_pulled).alias("date_pulled"))
+            )
+            .collect()
+            .lazy()
+        )
+
+        return output
 
     def standard_parse(self) -> pl.LazyFrame:
         """
@@ -169,7 +207,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         based on the endpoint's geography attribute, and reindexes the rows.
 
         Returns:
-            pl.DataFrame: A tidy Polars DataFrame with the processed data.
+            pl.DataFrame: A tidy Polars DataFriame with the processed data.
         """
         geos = self.endpoint.geography
         year = self.endpoint.year
