@@ -254,6 +254,7 @@ class APIDataMixin:
         )
 
         final_vars = [
+            "stratifier_id",
             "row_id",
             "variable",
             "group",
@@ -327,7 +328,7 @@ class APIDataMixin:
             # TODO flesh this out
             split_vars = _ensure_column_exists(origin, final_vars, "")
 
-        extras = _ensure_column_exists(self._extra, final_vars, "")
+        extras = _ensure_column_exists(self._extra, final_vars, "").select(final_vars)
 
         # add extras back and enforce column order
         split_vars = split_vars.select(final_vars)
@@ -343,7 +344,7 @@ class APIDataMixin:
                 pl.col("line_number").str.to_integer().alias("line_number"),
                 pl.col("column_number").str.to_integer().alias("column_number"),
             )
-            .sort("row_id")
+            .sort(["row_id", "stratifier_id"])
         )
 
         return output
