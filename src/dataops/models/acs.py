@@ -135,11 +135,18 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
 
-    def tidy_wide(self) -> pl.DataFrame:
+    def storage(self) -> pl.DataFrame:
+        pass
+
+    def long(self) -> pl.DataFrame:
+        pass
+
+    def wide(self) -> pl.DataFrame:
         """
-        generate a tidy wide table
+        generate a wide table
 
         """
+
         pass
 
     def standard_parse(self) -> pl.LazyFrame:
