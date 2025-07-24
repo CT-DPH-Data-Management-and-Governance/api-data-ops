@@ -203,14 +203,19 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             )
         ).collect()
 
+        # TODO I need to pull out the extra cols and their values - no values with the town names
+        # those need to be in the static section
         new_content = (
             self.standard_parse()
             .select(["stratifier_id", "label_line_type", "variable", "value"])
-            .collect()
+            .filter(~pl.col("variable").is_in(static_stratifier_cols))
+            # .collect()
+            # .unique()
             .join(human_var_labels, on="variable")
             .drop("variable")
-            .unique()
-            .pivot(on="label_line_type", values="value")
+            #       .unique()
+            #    )
+            #      .pivot(on="label_line_type", values="value", index=["stratifier_id", "measure"])
             # .unique()
             # .collect()
         )
