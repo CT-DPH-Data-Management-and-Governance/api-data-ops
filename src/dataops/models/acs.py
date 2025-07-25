@@ -146,6 +146,8 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         generate a wide table
 
         """
+
+        # TODO - lazyframe is causing dupes?
         # TODO split up labels
         # I want human-readable measure labels
         # I want to dyanmically capture names of the stratifiers and their cols
@@ -207,11 +209,13 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         # those need to be in the static section
         new_content = (
             self.standard_parse()
+            .join(self._extra, on="row_id", how="anti")
             .select(["stratifier_id", "label_line_type", "variable", "value"])
-            .filter(~pl.col("variable").is_in(static_stratifier_cols))
-            # .collect()
+            .fill_null("")
+            # .filter(~pl.col("variable").is_in(static_stratifier_cols))
+            .collect()
             # .unique()
-            .join(human_var_labels, on="variable")
+            .join(human_var_labels, on="variable", how="left")
             .drop("variable")
             #       .unique()
             #    )
@@ -220,8 +224,25 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             # .collect()
         )
 
+        # composite ids?
+        # keep getting pivot errors with groups, I don't know why, the math, maths.
+
+        new_content = new_content.with_columns(
+            pl.struct(["stratifier_id", "measure"]).rank("dense").alias("comp_id")
+        )
+
+        comp_ids = new_content.select(["comp_id", "stratifier_id", "measure"])
+
+        # IT WORKS!!!! omg
+        new_content.select(["comp_id", "label_line_type", "value"]).pivot(
+            "label_line_type",
+            index="comp_id",
+            values="value",
+            aggregate_function="first",
+        ).join(comp_ids, on="comp_id")
+
         date_pulled = (
-            self.standard_parse().select("date_pulled").unique().collect().item()
+            self.standard_parse().select("date_pulled").head(1).collect().item()
         )
 
         content = (
@@ -242,6 +263,10 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             .collect()
             .pivot(on="col_names", index="stratifier_id", values="value")
             .lazy()
+        )
+
+        new_content.pivot(
+            on="label_line_type", index=["stratifier_id", "measure"], values="value"
         )
 
         output = (
