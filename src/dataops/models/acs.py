@@ -237,6 +237,8 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         date_pulled = (
             self.standard_parse().select("date_pulled").head(1).collect().item()
         )
+        year = self.endpoint.year
+        dataset = self.endpoint.dataset
 
         output = (
             (
@@ -244,8 +246,11 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 .join(wide, on="stratifier_id")
                 .with_columns(
                     pl.lit(endpoint).alias("endpoint"),
+                    pl.lit(year).alias("year"),
+                    pl.lit(dataset).alias("dataset"),
                     pl.lit(date_pulled).alias("date_pulled"),
                 )
+                .with_row_index("row_id")
             )
             .collect()
             .lazy()
