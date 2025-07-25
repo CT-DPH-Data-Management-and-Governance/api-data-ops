@@ -219,9 +219,10 @@ class APIDataMixin:
 
         return (
             pl.LazyFrame(data=self._raw[1:], schema=self._raw[0], orient="row")
-            .with_row_index()
-            .unpivot(index="index", value_name="value", variable_name="variable")
-            .drop("index")
+            .with_row_index("stratifier_id")
+            .unpivot(
+                index="stratifier_id", value_name="value", variable_name="variable"
+            )
         )
 
     @computed_field
