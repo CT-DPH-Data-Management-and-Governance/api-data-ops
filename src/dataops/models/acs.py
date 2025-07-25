@@ -138,8 +138,70 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
     def storage(self) -> pl.DataFrame:
         pass
 
-    def long(self) -> pl.DataFrame:
-        pass
+    def long(self) -> pl.LazyFrame:
+        """
+        generate a long table
+        """
+
+        order = [
+            "stratifier_id",
+            "row_id",
+            "universe",
+            "concept",
+            "measure",
+            "value_type",
+            "value",
+            "variable",
+            "endpoint",
+            "year",
+            "dataset",
+            "date_pulled",
+        ]
+
+        dataset = self.endpoint.dataset
+
+        long = (
+            self.standard_parse()
+            .drop("row_id")
+            .with_columns(pl.col("label_end").fill_null(""))
+            .with_columns(
+                pl.concat_str(
+                    [
+                        pl.col("label_concept_base"),
+                        pl.lit(": "),
+                        pl.col("label_stratifier"),
+                        pl.lit(" - "),
+                        pl.col("label_end"),
+                    ]
+                )
+                .str.strip_chars()
+                .alias("measure"),
+                pl.when(pl.col("label_line_type").is_null())
+                .then(pl.col("variable"))
+                .otherwise(pl.col("label_line_type"))
+                .alias("value_type"),
+                pl.lit(dataset).alias("dataset"),
+            )
+            .with_columns(
+                pl.when(
+                    pl.col(
+                        "universe",
+                        "concept",
+                        "measure",
+                    ).is_null()
+                )
+                .then(pl.col("value_type"))
+                .otherwise(
+                    pl.col(
+                        "universe",
+                        "concept",
+                        "measure",
+                    )
+                )
+            )
+            .select(order)
+            .collect()
+        )
 
     def wide(self) -> pl.LazyFrame:
         """
