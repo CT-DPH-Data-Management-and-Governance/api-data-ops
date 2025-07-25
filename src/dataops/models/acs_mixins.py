@@ -20,6 +20,7 @@ class TableType(str, Enum):
     subject = "subject"
     detailed = "detailed"
     cprofile = "cprofile"
+    dataprofile = "dataprofile"
     unknown = "unknown"
 
 
@@ -108,16 +109,31 @@ class APIEndpointMixin:
 
         _is_group = (_length < 2) & (_starts_with) & (_maybe_detailed)
 
+        tabletype = TableType.unknown
+
         if _is_group:
-            return TableType.detailed
+            tabletype = TableType.detailed
+            return tabletype
+
+        elif last == "profile":
+            profile_type = self.group[0]
+            match profile_type:
+                case "D":
+                    tabletype = TableType.dataprofile
+                    return tabletype
+                case "C":
+                    tabletype = TableType.cprofile
+                    return tabletype
+                case _:
+                    tabletype = TableType.unknown
+                    return tabletype
 
         else:
             try:
                 tabletype = TableType[last]
             except KeyError:
                 tabletype = TableType.unknown
-            finally:
-                return tabletype
+            return tabletype
 
 
 class APIDataMixin:
@@ -243,10 +259,19 @@ class APIDataMixin:
         Returns the extra, often metadata or
         geography-related rows from the LazyFrame.
         """
-        return self._lazyframe.filter(
-            (~pl.col("variable").str.starts_with(pl.col("group")))
-            | (pl.col("group").is_null())
+        lf = self._lazyframe.with_columns(
+            pl.col("variable").str.split("_").list.first().alias("computed_group")
         )
+
+        groups = (
+            lf.select("group")
+            .unique()
+            .filter(pl.col("group").is_not_null())
+            .collect()
+            .item()
+        )
+
+        return lf.filter(pl.col("computed_group").ne(groups))
 
     @computed_field
     @property
@@ -333,7 +358,7 @@ class APIDataMixin:
                 .with_columns(pl.col(pl.String).replace("", None))
             )
 
-        if self.endpoint.table_type.value == "detailed":
+        if self.endpoint.table_type.value in ["detailed", "dataprofile"]:
             split_vars = (
                 origin.with_columns(
                     pl.col("variable")
