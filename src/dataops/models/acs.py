@@ -348,7 +348,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         based on the endpoint's geography attribute, and reindexes the rows.
 
         Returns:
-            pl.DataFrame: A tidy Polars DataFriame with the processed data.
+            pl.DataFrame: A tidy Polars DataFrame with the processed data.
         """
         geos = self.endpoint.geography
         year = self.endpoint.year
