@@ -147,29 +147,28 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
 
         """
 
-        # TODO - lazyframe is causing dupes?
-        # TODO split up labels
-        # I want human-readable measure labels
-        # I want to dyanmically capture names of the stratifiers and their cols
-
-        # ------static ------------- | dynamic -----------#
-        # endpoint
-
-        # the row content that will be repeated by "measure" like town by
-        # total european pop with E, EA, M, and MA cols
-
         static_stratifier_cols = (
             self._extra.select("variable").unique().collect().to_series().to_list()
         )
 
+        static_stratifier_values = (
+            self._extra.select(["stratifier_id", "variable", "value"])
+            .unique()
+            .with_columns(
+                pl.col("variable").str.to_lowercase().str.replace_all(" ", "_")
+            )
+            .collect()
+            .pivot("variable", index="stratifier_id", values="value")
+            .lazy()
+        )
+
         # consider dropping id - and just join to every row at end?
         static_meta_cols = (
-            self.standard_parse()
-            .select(
+            self._no_extra.select(
                 [
                     "stratifier_id",
-                    "endpoint",
                     "universe",
+                    "concept",
                 ]
             )
             .drop_nulls()
@@ -203,79 +202,53 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 .str.strip_chars()
                 .alias("measure"),
             )
-        ).collect()
-
-        # TODO I need to pull out the extra cols and their values - no values with the town names
-        # those need to be in the static section
-        new_content = (
-            self.standard_parse()
-            .join(self._extra, on="row_id", how="anti")
-            .select(["stratifier_id", "label_line_type", "variable", "value"])
-            .fill_null("")
-            # .filter(~pl.col("variable").is_in(static_stratifier_cols))
-            .collect()
-            # .unique()
-            .join(human_var_labels, on="variable", how="left")
-            .drop("variable")
-            #       .unique()
-            #    )
-            #      .pivot(on="label_line_type", values="value", index=["stratifier_id", "measure"])
-            # .unique()
-            # .collect()
-        )
-
-        # composite ids?
-        # keep getting pivot errors with groups, I don't know why, the math, maths.
-
-        new_content = new_content.with_columns(
-            pl.struct(["stratifier_id", "measure"]).rank("dense").alias("comp_id")
-        )
-
-        comp_ids = new_content.select(["comp_id", "stratifier_id", "measure"])
-
-        # IT WORKS!!!! omg
-        new_content.select(["comp_id", "label_line_type", "value"]).pivot(
-            "label_line_type",
-            index="comp_id",
-            values="value",
-            aggregate_function="first",
-        ).join(comp_ids, on="comp_id")
-
-        date_pulled = (
-            self.standard_parse().select("date_pulled").head(1).collect().item()
         )
 
         content = (
             self.standard_parse()
+            .join(self._extra, on="row_id", how="anti")
+            .select(["stratifier_id", "label_line_type", "variable", "value"])
+            .fill_null("")
+            .join(human_var_labels, on="variable", how="left")
+            .drop("variable")
             .with_columns(
-                pl.when(
-                    pl.col("label_line_type").is_null().and_(pl.col("label").is_null())
-                )
-                .then(pl.col("variable"))
-                .when(pl.col("label_line_type").is_null())
-                .then(pl.col("label"))
-                .otherwise(pl.col("label_line_type"))
-                .str.to_lowercase()
-                .str.replace_all(" ", "_")
-                .alias("col_names")
+                pl.struct(["stratifier_id", "measure"]).rank("dense").alias("comp_id")
             )
-            .select(["col_names", "stratifier_id", "value"])
+        )
+
+        comp_ids = content.select(["comp_id", "stratifier_id", "measure"]).unique()
+
+        wide = (
+            content.select(["comp_id", "label_line_type", "value"])
             .collect()
-            .pivot(on="col_names", index="stratifier_id", values="value")
+            .pivot(
+                "label_line_type",
+                index="comp_id",
+                values="value",
+                aggregate_function="first",
+            )
             .lazy()
         )
 
-        new_content.pivot(
-            on="label_line_type", index=["stratifier_id", "measure"], values="value"
+        wide = comp_ids.join(wide, on="comp_id").drop("comp_id")
+
+        # literals
+        endpoint = self.endpoint.url_no_key
+        date_pulled = (
+            self.standard_parse().select("date_pulled").head(1).collect().item()
         )
 
         output = (
             (
-                labels.join(content, on="stratifier_id")
-                .drop("stratifier_id")
-                .with_columns(pl.lit(date_pulled).alias("date_pulled"))
-            ).collect()
-            # .lazy()
+                static_stratifier_values.join(static_meta_cols, on="stratifier_id")
+                .join(wide, on="stratifier_id")
+                .with_columns(
+                    pl.lit(endpoint).alias("endpoint"),
+                    pl.lit(date_pulled).alias("date_pulled"),
+                )
+            )
+            .collect()
+            .lazy()
         )
 
         return output
