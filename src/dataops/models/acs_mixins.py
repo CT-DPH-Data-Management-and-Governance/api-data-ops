@@ -20,6 +20,7 @@ class TableType(str, Enum):
     subject = "subject"
     detailed = "detailed"
     cprofile = "cprofile"
+    dataprofile = "dataprofile"
     unknown = "unknown"
 
 
@@ -108,16 +109,31 @@ class APIEndpointMixin:
 
         _is_group = (_length < 2) & (_starts_with) & (_maybe_detailed)
 
+        tabletype = TableType.unknown
+
         if _is_group:
-            return TableType.detailed
+            tabletype = TableType.detailed
+            return tabletype
+
+        elif last == "profile":
+            profile_type = self.group[0]
+            match profile_type:
+                case "D":
+                    tabletype = TableType.dataprofile
+                    return tabletype
+                case "C":
+                    tabletype = TableType.cprofile
+                    return tabletype
+                case _:
+                    tabletype = TableType.unknown
+                    return tabletype
 
         else:
             try:
                 tabletype = TableType[last]
             except KeyError:
                 tabletype = TableType.unknown
-            finally:
-                return tabletype
+            return tabletype
 
 
 class APIDataMixin:
@@ -126,7 +142,7 @@ class APIDataMixin:
     # part of repr
     @computed_field
     @cached_property
-    def concept(self) -> str:
+    def concept(self) -> list[str]:
         """Endpoint ACS Concept as assigned by the Census"""
 
         return (
@@ -176,6 +192,8 @@ class APIDataMixin:
         )
 
         final_cols = [
+            "row_id",
+            "stratifier_id",
             "variable",
             "group",
             "value",
@@ -188,31 +206,51 @@ class APIDataMixin:
         output = pl.LazyFrame()
         raw = self._raw
 
-        if len(raw) == 2:
-            output = (
-                pl.LazyFrame({"variable": raw[0], "value": raw[1]})
-                .with_columns(date_pulled=dt.now())
-                .join(relevant_variable_labels, how="left", on="variable")
-                .select(final_cols)
-            ).with_row_index("row_id")
+        # start wide to accomadate any kind of endpoint
+        # add a stratifier id to accomadate any kind of strat/geo etc...
+        # then unpivot to longer for easy joins.
 
-        if len(raw) > 2:
-            all_frames = []
-            variables = raw[0]
+        output = (
+            pl.LazyFrame(data=raw[1:], schema=raw[0], orient="row")
+            .with_row_index(name="stratifier_id")
+            .unpivot(
+                index="stratifier_id", value_name="value", variable_name="variable"
+            )
+            .join(relevant_variable_labels, how="left", on="variable")
+            .with_row_index("row_id")
+            .with_columns(date_pulled=dt.now())
+            .select(final_cols)
+        )
 
-            for value in raw[1:]:
-                lf = (
-                    pl.LazyFrame({"variable": variables, "value": value})
-                    .with_columns(date_pulled=dt.now())
-                    .join(relevant_variable_labels, how="left", on="variable")
-                    .select(final_cols)
-                )
+        return output.collect().lazy()
 
-                all_frames.append(lf)
+    @computed_field
+    @property
+    def _rawframe_long(self) -> pl.LazyFrame:
+        """
+        Returns the API Response data back in a dataframe
+        closely mirroring the raw response text, often as a
+        monstrously wide table.
+        """
 
-            output = pl.concat(all_frames).with_row_index("row_id")
+        return (
+            pl.LazyFrame(data=self._raw[1:], schema=self._raw[0], orient="row")
+            .with_row_index("stratifier_id")
+            .unpivot(
+                index="stratifier_id", value_name="value", variable_name="variable"
+            )
+        )
 
-        return output
+    @computed_field
+    @property
+    def _rawframe_wide(self) -> pl.LazyFrame:
+        """
+        Returns the API Response data back in a dataframe
+        closely mirroring the raw response text, often as a
+        monstrously wide table.
+        """
+
+        return pl.LazyFrame(data=self._raw[1:], schema=self._raw[0], orient="row")
 
     @computed_field
     @property
@@ -221,10 +259,19 @@ class APIDataMixin:
         Returns the extra, often metadata or
         geography-related rows from the LazyFrame.
         """
-        return self._lazyframe.filter(
-            (~pl.col("variable").str.starts_with(pl.col("group")))
-            | (pl.col("group").is_null())
+        lf = self._lazyframe.with_columns(
+            pl.col("variable").str.split("_").list.first().alias("computed_group")
         )
+
+        groups = (
+            lf.select("group")
+            .unique()
+            .filter(pl.col("group").is_not_null())
+            .collect()
+            .item()
+        )
+
+        return lf.filter(pl.col("computed_group").ne(groups))
 
     @computed_field
     @property
@@ -260,6 +307,7 @@ class APIDataMixin:
         )
 
         final_vars = [
+            "stratifier_id",
             "row_id",
             "variable",
             "group",
@@ -310,7 +358,7 @@ class APIDataMixin:
                 .with_columns(pl.col(pl.String).replace("", None))
             )
 
-        if self.endpoint.table_type.value == "detailed":
+        if self.endpoint.table_type.value in ["detailed", "dataprofile"]:
             split_vars = (
                 origin.with_columns(
                     pl.col("variable")
@@ -333,7 +381,7 @@ class APIDataMixin:
             # TODO flesh this out
             split_vars = _ensure_column_exists(origin, final_vars, "")
 
-        extras = _ensure_column_exists(self._extra, final_vars, "")
+        extras = _ensure_column_exists(self._extra, final_vars, "").select(final_vars)
 
         # add extras back and enforce column order
         split_vars = split_vars.select(final_vars)
@@ -349,7 +397,7 @@ class APIDataMixin:
                 pl.col("line_number").str.to_integer().alias("line_number"),
                 pl.col("column_number").str.to_integer().alias("column_number"),
             )
-            .sort("row_id")
+            .sort(["row_id", "stratifier_id"])
         )
 
         return output
@@ -491,7 +539,7 @@ class APIRequestMixin:
             output = _ensure_column_exists(output, final_vars, default_value)
             output = output.select(final_vars)
 
-        return output
+        return output.collect().lazy()
 
     @computed_field
     @cached_property
