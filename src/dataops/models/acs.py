@@ -174,6 +174,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                         pl.col("label_end"),
                     ]
                 )
+                .str.strip_chars_end(" - ")
                 .str.strip_chars()
                 .alias("measure"),
                 pl.when(pl.col("label_line_type").is_null())
@@ -183,25 +184,27 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 pl.lit(dataset).alias("dataset"),
             )
             .with_columns(
-                pl.when(
-                    pl.col(
-                        "universe",
-                        "concept",
-                        "measure",
-                    ).is_null()
-                )
+                pl.when(pl.col("universe").is_null())
                 .then(pl.col("value_type"))
-                .otherwise(
-                    pl.col(
-                        "universe",
-                        "concept",
-                        "measure",
-                    )
-                )
+                .otherwise("universe")
+                .alias("universe"),
+                pl.when(pl.col("concept").is_null())
+                .then(pl.col("value_type"))
+                .otherwise("concept")
+                .alias("concept"),
+                pl.when(pl.col("measure").is_null())
+                .then(pl.col("value_type"))
+                .otherwise("measure")
+                .alias("measure"),
             )
+            .sort(["stratifier_id", "variable"])
+            .with_row_index("row_id")
             .select(order)
             .collect()
+            .lazy()
         )
+
+        return long
 
     def wide(self) -> pl.LazyFrame:
         """
@@ -261,6 +264,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                         pl.col("label_end"),
                     ]
                 )
+                .str.strip_chars_end(" - ")
                 .str.strip_chars()
                 .alias("measure"),
             )
@@ -270,7 +274,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             self.standard_parse()
             .join(self._extra, on="row_id", how="anti")
             .select(["stratifier_id", "label_line_type", "variable", "value"])
-            .fill_null("")
+            # .fill_null("")
             .join(human_var_labels, on="variable", how="left")
             .drop("variable")
             .with_columns(
@@ -312,6 +316,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                     pl.lit(dataset).alias("dataset"),
                     pl.lit(date_pulled).alias("date_pulled"),
                 )
+                .sort(["stratifier_id", "measure"])
                 .with_row_index("row_id")
             )
             .collect()
