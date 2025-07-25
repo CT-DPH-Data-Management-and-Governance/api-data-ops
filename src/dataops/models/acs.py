@@ -135,8 +135,21 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
 
-    def storage(self) -> pl.DataFrame:
-        pass
+    def storage(self) -> pl.LazyFrame:
+        """
+        generate a long table - with more integer ids.
+        halfway between wide and long. E/EA/M/MA etc... are kept
+        long like long. but the _extras are kept in a single column,
+        like wide, but always one column. <- or something like that?
+
+        or mayeb do an algo - since we'll always have url geography,
+        look for name, if no name then look for x, then y etc...
+        so maybe 2 columns, url geos, and consolidated extras col.
+
+        """
+
+        # placeholder
+        return self.long()
 
     def long(self) -> pl.LazyFrame:
         """
