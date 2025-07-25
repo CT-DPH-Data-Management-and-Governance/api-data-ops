@@ -210,6 +210,17 @@ class APIDataMixin:
 
     @computed_field
     @property
+    def _rawframe_wide(self) -> pl.LazyFrame:
+        """
+        Returns the API Response data back in a dataframe
+        closely mirroring the raw response text, often as a
+        monstrously wide table.
+        """
+
+        return pl.LazyFrame(data=self._raw[1:], schema=self._raw[0], orient="row")
+
+    @computed_field
+    @property
     def _extra(self) -> pl.LazyFrame:
         """
         Returns the extra, often metadata or
