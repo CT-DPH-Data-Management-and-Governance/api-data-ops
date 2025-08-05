@@ -17,13 +17,13 @@ def fetch_data(
         settings = AppSettings()
 
     if source is None:
-        source = settings.source_id
+        source = settings.api.source.id
 
     with Socrata(
-        settings.domain,
-        settings.socrata_token,
-        settings.socrata_user,
-        settings.socrata_pass,
+        settings.api.domain,
+        settings.account.token.get_secret_value(),
+        settings.account.username,
+        settings.account.password.get_secret_value(),
     ) as client:
         data = client.get_all(source)
         data = pl.LazyFrame(data)
@@ -44,7 +44,7 @@ def pull_endpoints(df: pl.DataFrame) -> list[str] | pl.DataFrame:
 
 
 def replace_data(
-    data: pl.DataFrame,
+    data: pl.DataFrame | pl.LazyFrame,
     target: str | None = None,
     settings: AppSettings | None = None,
 ):
@@ -52,14 +52,14 @@ def replace_data(
         settings = AppSettings()
 
     if target is None:
-        target = settings.target_id
+        target = settings.api.target.id
 
-    dict_data = data.to_dicts()
+    dict_data = data.lazy().collect().to_dicts()
 
     with Socrata(
-        settings.domain,
-        settings.socrata_token,
-        settings.socrata_user,
-        settings.socrata_pass,
+        settings.api.domain,
+        settings.account.token.get_secret_value(),
+        settings.account.username,
+        settings.account.password.get_secret_value(),
     ) as client:
         client.replace(target, dict_data)
