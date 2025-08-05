@@ -52,7 +52,7 @@ class APIEndpoint(APIEndpointMixin, BaseModel):
         SecretStr | None,
         Field(
             repr=False,
-            description="Your Census API key. If not provided, it's sourced from the CENSUS_API_KEY environment variable.",
+            description="Your Census API key. If not provided, it's sourced from the CENSUS__TOKEN environment variable.",
         ),
     ] = None
 
