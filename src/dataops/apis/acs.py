@@ -11,10 +11,10 @@ from pydantic import (
 )
 from pydantic_settings import SettingsConfigDict
 
-from dataops.models.acs_mixins import APIDataMixin, APIEndpointMixin, APIRequestMixin
+from dataops.mixins.acs import APIDataMixin, APIEndpointMixin, APIRequestMixin
 
 
-class Endpoint(APIEndpointMixin, BaseModel):
+class APIEndpoint(APIEndpointMixin, BaseModel):
     """
     A Pydantic model to represent, validate, and interact with a
     U.S. Census Bureau's American Community Survey API endpoint.

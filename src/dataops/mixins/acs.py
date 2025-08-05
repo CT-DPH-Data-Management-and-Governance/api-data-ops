@@ -13,7 +13,7 @@ from pydantic import (
 
 from dataops._helpers import _ensure_column_exists
 from dataops.api import _get
-from dataops.models import settings
+from dataops.settings.acs import AppSettings
 
 
 class TableType(str, Enum):
@@ -32,7 +32,7 @@ class APIEndpointMixin:
     def set_api_key_from_env(cls, data: Any) -> Any:
         """Sets API key from env var if not provided."""
         if isinstance(data, dict) and not data.get("api_key"):
-            data["api_key"] = settings.AppSettings().census.token.get_secret_value()
+            data["api_key"] = AppSettings().census.token.get_secret_value()
         return data
 
     @field_validator("dataset")

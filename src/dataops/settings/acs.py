@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-import dataops.models.configs as cfg
+from dataops.configs.account import AccountConfig
+from dataops.configs.census import CensusConfig
+from dataops.configs.socrata import SocrataAPIConfig
 
 
 class AppSettings(BaseSettings):
@@ -10,6 +12,6 @@ class AppSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_nested_delimiter="__")
 
-    account: cfg.AccountConfig
-    api: cfg.APIConfig
-    census: cfg.CensusConfig
+    account: AccountConfig
+    api: SocrataAPIConfig
+    census: CensusConfig
