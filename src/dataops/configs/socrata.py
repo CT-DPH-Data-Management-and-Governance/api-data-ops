@@ -3,15 +3,9 @@ from typing import Annotated
 from pydantic import (
     BaseModel,
     Field,
-    SecretStr,
+    # SecretStr,
     field_validator,
 )
-
-
-class CensusConfig(BaseModel):
-    """Validate Census API specific details."""
-
-    token: Annotated[SecretStr | None, Field(description="Census API Token")] = None
 
 
 class SocrataTableID(BaseModel):
@@ -32,7 +26,7 @@ class SocrataTableID(BaseModel):
         return v
 
 
-class APIConfig(BaseModel):
+class SocrataAPIConfig(BaseModel):
     """Validates API-specific details."""
 
     domain: str = Field(
