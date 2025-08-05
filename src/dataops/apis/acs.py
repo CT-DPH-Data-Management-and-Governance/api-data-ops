@@ -125,7 +125,7 @@ class APIEndpoint(APIEndpointMixin, BaseModel):
             ) from e
 
 
-class Data(APIRequestMixin, APIDataMixin, BaseModel):
+class APIData(APIRequestMixin, APIDataMixin, BaseModel):
     """
     A Pydantic model to represent the response data
     from the Census Bureau API Endpoint.
