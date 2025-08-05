@@ -7,7 +7,7 @@ from pydantic import (
 )
 
 
-class CensusConfig(BaseModel):
+class ACSConfig(BaseModel):
     """Validate Census API specific details."""
 
     token: Annotated[SecretStr | None, Field(description="Census API Token")] = None
