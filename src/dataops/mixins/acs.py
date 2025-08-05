@@ -11,9 +11,9 @@ from pydantic import (
     model_validator,
 )
 
-from dataops._helpers import _ensure_column_exists
-from dataops.api import _get
-from dataops.models import settings
+from dataops.helpers.polars import ensure_column_exists
+from dataops.http.data import get
+from dataops.settings.acs import AppSettings
 
 
 class TableType(str, Enum):
@@ -32,7 +32,7 @@ class APIEndpointMixin:
     def set_api_key_from_env(cls, data: Any) -> Any:
         """Sets API key from env var if not provided."""
         if isinstance(data, dict) and not data.get("api_key"):
-            data["api_key"] = settings.AppSettings().census.token.get_secret_value()
+            data["api_key"] = AppSettings().census.token.get_secret_value()
         return data
 
     @field_validator("dataset")
@@ -379,9 +379,9 @@ class APIDataMixin:
 
         if self.endpoint.table_type.value in ["unknown", "cprofile"]:
             # TODO flesh this out
-            split_vars = _ensure_column_exists(origin, final_vars, "")
+            split_vars = ensure_column_exists(origin, final_vars, "")
 
-        extras = _ensure_column_exists(self._extra, final_vars, "").select(final_vars)
+        extras = ensure_column_exists(self._extra, final_vars, "").select(final_vars)
 
         # add extras back and enforce column order
         split_vars = split_vars.select(final_vars)
@@ -505,7 +505,7 @@ class APIRequestMixin:
         as a list and caches it.
         """
 
-        raw = _get(self.endpoint.variable_endpoint, self.endpoint.dataset)
+        raw = get(self.endpoint.variable_endpoint, self.endpoint.dataset)
 
         final_vars = ["variable", "label", "concept", "group", "universe"]
         default_value = "unknown as queried"
@@ -536,7 +536,7 @@ class APIRequestMixin:
                 .with_columns(pl.col("value").struct.unnest())
             )
 
-            output = _ensure_column_exists(output, final_vars, default_value)
+            output = ensure_column_exists(output, final_vars, default_value)
             output = output.select(final_vars)
 
         return output.collect().lazy()
@@ -548,4 +548,4 @@ class APIRequestMixin:
         Fetches the raw data from the API and returns
         it as a list and caches it.
         """
-        return _get(self.endpoint.full_url, self.endpoint.dataset)
+        return get(self.endpoint.full_url, self.endpoint.dataset)

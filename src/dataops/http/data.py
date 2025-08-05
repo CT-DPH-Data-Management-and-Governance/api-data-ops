@@ -4,7 +4,7 @@ import requests
 from pydantic import HttpUrl
 
 
-def _get(endpoint: HttpUrl | str, name: str):
+def get(endpoint: HttpUrl | str, name: str) -> dict | list:
     # check the response
     try:
         response = requests.get(endpoint, timeout=30)

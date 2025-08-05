@@ -3,23 +3,8 @@ from typing import Annotated
 from pydantic import (
     BaseModel,
     Field,
-    SecretStr,
     field_validator,
 )
-
-
-class AccountConfig(BaseModel):
-    """Validates user-specific credentials."""
-
-    username: Annotated[str | None, Field(description="Username or Email")] = None
-    password: Annotated[SecretStr | None, Field(description="Password")] = None
-    token: Annotated[SecretStr | None, Field(description="Socrata Token")] = None
-
-
-class CensusConfig(BaseModel):
-    """Validate Census API specific details."""
-
-    token: Annotated[SecretStr | None, Field(description="Census API Token")] = None
 
 
 class SocrataTableID(BaseModel):
@@ -40,7 +25,7 @@ class SocrataTableID(BaseModel):
         return v
 
 
-class APIConfig(BaseModel):
+class SocrataAPIConfig(BaseModel):
     """Validates API-specific details."""
 
     domain: str = Field(

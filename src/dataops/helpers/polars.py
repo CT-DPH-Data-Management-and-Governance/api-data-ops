@@ -1,7 +1,7 @@
 import polars as pl
 
 
-def _ensure_column_exists(
+def ensure_column_exists(
     data: pl.LazyFrame | pl.DataFrame,
     column_name: list[str],
     default_value: str = "unknown as queried",
