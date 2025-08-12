@@ -301,9 +301,15 @@ class APIDataMixin:
             pl.col("table_id").str.slice(6).alias("table_id_suffix"),
         )
 
+        # some of the tables don't fully adhere to be able to use slicing
         common_line_expr = (
-            pl.col("line_id").str.slice(0, 3).alias("line_number").str.to_integer(),
-            pl.col("line_id").str.slice(3).alias("line_suffix"),
+            pl.col("line_id")
+            .str.extract(r"^(\d+)")
+            .alias("line_number")
+            .str.to_integer(),
+            pl.col("line_id").str.extract(r"(\D+)$").alias("line_suffix"),
+            # pl.col("line_id").str.slice(0, 3).alias("line_number").str.to_integer(),
+            # pl.col("line_id").str.slice(3).alias("line_suffix"),
         )
 
         final_vars = [
@@ -375,6 +381,9 @@ class APIDataMixin:
                     pl.lit(None).cast(pl.String).alias("column_id"),
                     pl.col(pl.String).replace("", None),
                 )
+                .with_columns(
+                    measure_id=pl.struct("column_number", "line_number").rank("dense")
+                )
             )
 
         if self.endpoint.table_type.value in ["unknown", "cprofile"]:
@@ -393,9 +402,10 @@ class APIDataMixin:
                 .sort("row_id")
             )
             .with_columns(
-                # TODO push this up higher and make how = "vertical"
-                pl.col("line_number").str.to_integer().alias("line_number"),
-                pl.col("column_number").str.to_integer().alias("column_number"),
+                pl.col("line_number").str.to_integer(strict=False).alias("line_number"),
+                pl.col("column_number")
+                .str.to_integer(strict=False)
+                .alias("column_number"),
             )
             .sort(["row_id", "stratifier_id"])
         )
