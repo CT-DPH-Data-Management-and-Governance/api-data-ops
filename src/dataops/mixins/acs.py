@@ -414,6 +414,7 @@ class APIDataMixin:
                 .alias("column_number"),
                 pl.col("measure_id").str.to_integer(strict=False).alias("measure_id"),
             )
+            .with_columns(pl.col("measure_id").fill_null(-99))
             .sort(["row_id", "stratifier_id"])
         )
 
