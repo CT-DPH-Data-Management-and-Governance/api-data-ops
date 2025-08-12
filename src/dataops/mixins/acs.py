@@ -301,6 +301,12 @@ class APIDataMixin:
             pl.col("table_id").str.slice(6).alias("table_id_suffix"),
         )
 
+        measure_id_expr = (
+            pl.struct("stratifier_id", "column_number", "line_number")
+            .rank("dense")
+            .alias("measure_id")
+        )
+
         # some of the tables don't fully adhere to be able to use slicing
         common_line_expr = (
             pl.col("line_id")
@@ -316,6 +322,7 @@ class APIDataMixin:
             "stratifier_id",
             "row_id",
             "variable",
+            "measure_id",
             "group",
             "value",
             "label",
@@ -362,6 +369,7 @@ class APIDataMixin:
                 .with_columns(common_var_meta_expr)
                 .with_columns(common_line_expr)
                 .with_columns(pl.col(pl.String).replace("", None))
+                .with_columns(measure_id_expr)
             )
 
         if self.endpoint.table_type.value in ["detailed", "dataprofile"]:
@@ -381,9 +389,7 @@ class APIDataMixin:
                     pl.lit(None).cast(pl.String).alias("column_id"),
                     pl.col(pl.String).replace("", None),
                 )
-                .with_columns(
-                    measure_id=pl.struct("column_number", "line_number").rank("dense")
-                )
+                .with_columns(measure_id_expr)
             )
 
         if self.endpoint.table_type.value in ["unknown", "cprofile"]:
@@ -406,6 +412,7 @@ class APIDataMixin:
                 pl.col("column_number")
                 .str.to_integer(strict=False)
                 .alias("column_number"),
+                pl.col("measure_id").str.to_integer(strict=False).alias("measure_id"),
             )
             .sort(["row_id", "stratifier_id"])
         )

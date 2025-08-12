@@ -159,6 +159,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         order = [
             "stratifier_id",
             "row_id",
+            "measure_id",
             "universe",
             "concept",
             "measure",
@@ -387,6 +388,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 .select(
                     [
                         "row_id",
+                        "measure_id",
                         "table_type",
                         "table_id",
                         "table_subject_id",
@@ -408,6 +410,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         order = [
             "stratifier_id",
             "row_id",
+            "measure_id",
             "endpoint",
             "year",
             "variable",
