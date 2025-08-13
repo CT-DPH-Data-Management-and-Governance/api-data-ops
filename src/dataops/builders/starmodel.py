@@ -22,7 +22,6 @@ class ACSStarModel(BaseModel):
     dim_valuetype: pl.LazyFrame
     # dim measure
     dim_endpoint: pl.LazyFrame
-    # dim year
     dim_dataset: pl.LazyFrame
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
@@ -55,7 +54,6 @@ class ACSStarModelBuilder(BaseModel):
                 pl.col("universe").rank("dense").alias("DimUniverseID"),
                 pl.col("concept").rank("dense").alias("DimConceptID"),
                 pl.col("endpoint").rank("dense").alias("DimEndpointID"),
-                pl.col("year").rank("dense").alias("DimYearID"),
                 pl.col("dataset").rank("dense").alias("DimDatasetID"),
                 pl.col("value_type").rank("dense").alias("DimValueTypeID"),
             )
@@ -69,11 +67,11 @@ class ACSStarModelBuilder(BaseModel):
 
     def set_fact(self, fact: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
         if fact is not None:
-            self.fact = fact
+            self.fact = fact.lazy()
             return self
 
         fact = self._long.drop(
-            ["universe", "concept", "endpoint", "year", "dataset", "value_type"]
+            ["universe", "concept", "endpoint", "dataset", "value_type"]
         )
         self.fact = fact
         return self
@@ -82,7 +80,7 @@ class ACSStarModelBuilder(BaseModel):
         self, universe: pl.DataFrame | None = None
     ) -> "ACSStarModelBuilder":
         if universe is not None:
-            self.dim_universe = universe
+            self.dim_universe = universe.lazy()
             return self
 
         universe = self._long.select(["DimUniverseID", "universe"]).unique()
@@ -92,7 +90,7 @@ class ACSStarModelBuilder(BaseModel):
 
     def set_concept(self, concept: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
         if concept is not None:
-            self.dim_concept = concept
+            self.dim_concept = concept.lazy()
             return self
 
         concept = self._long.select(["DimConceptID", "concept"]).unique()
@@ -104,7 +102,7 @@ class ACSStarModelBuilder(BaseModel):
         self, endpoint: pl.DataFrame | None = None
     ) -> "ACSStarModelBuilder":
         if endpoint is not None:
-            self.dim_endpoint = endpoint
+            self.dim_endpoint = endpoint.lazy()
             return self
 
         endpoint = self._long.select(["DimEndpointID", "endpoint"]).unique()
@@ -138,7 +136,7 @@ class ACSStarModelBuilder(BaseModel):
         self, stratifiers: pl.DataFrame | None = None
     ) -> "ACSStarModelBuilder":
         if stratifiers is not None:
-            self.dim_stratifiers = stratifiers
+            self.dim_stratifiers = stratifiers.lazy()
             return self
 
         dim = (
@@ -171,4 +169,6 @@ class ACSStarModelBuilder(BaseModel):
             dim_universe=self.dim_universe,
             dim_concept=self.dim_concept,
             dim_endpoint=self.dim_endpoint,
+            dim_dataset=self.dim_dataset,
+            dim_valuetype=self.dim_valuetype,
         )
