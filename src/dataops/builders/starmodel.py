@@ -29,12 +29,14 @@ class ACSStarModel(BaseModel):
 
 
 class ACSStarModelBuilder(BaseModel):
-    api_data: APIData
-    fact: pl.LazyFrame | None = None
-    dim_stratifiers: pl.LazyFrame | None = None
-    dim_universe: pl.LazyFrame | None = None
-    dim_concept: pl.LazyFrame | None = None
-    dim_endpoint: pl.LazyFrame | None = None
+    api_data: APIData | pl.LazyFrame  # add validations to check if APIData.long()
+    fact: pl.LazyFrame = pl.LazyFrame()
+    dim_stratifiers: pl.LazyFrame = pl.LazyFrame()
+    dim_universe: pl.LazyFrame = pl.LazyFrame()
+    dim_concept: pl.LazyFrame = pl.LazyFrame()
+    dim_endpoint: pl.LazyFrame = pl.LazyFrame()
+    dim_valuetype: pl.LazyFrame = pl.LazyFrame()
+    dim_dataset: pl.LazyFrame = pl.LazyFrame()
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
 
