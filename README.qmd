@@ -1,0 +1,101 @@
+---
+title: DMAG Data Ops
+format: gfm
+---
+
+
+## Overview
+Python toolkit for DPH DMAG Data OPS. Currently focusing on pipeline work
+surrounding census apis.
+
+## Features
+
+
+- ACS API tooling:
+    - [Polars](https://pola.rs/): Blazingly fast data manipulations
+    - Multiple attributes and methods for keeping endpoint data as raw or as wrangled as you like, with varying format options!
+- Strong Base for Applications:
+    - [Pydantic](https://docs.pydantic.dev/latest/) models for powerful validation features and a smoother developer experience.
+    - [Pydantic Settings Management](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) for validating 
+    and handling environmental variables, build stateless apps with ease!
+
+## Usage
+
+### American Community Survey
+
+Parse useful metadata from American Community Survey (ACS) API endpoints even before making a single GET request:
+
+#### Endpoints
+
+Look at all the info you can gather before sending a request on up.
+Of note is the `variable_endpoint` so you can scope out the variable
+labels yourself if you like.
+
+```{python}
+from dataops.apis.acs import APIData, APIEndpoint
+import polars as pl
+
+acs_url = (
+    "https://api.census.gov/data/2022/acs/acs1?get=group(B19013I)&ucgid=0400000US09"
+)
+endpoint = APIEndpoint.from_url(acs_url)
+
+endpoint
+```
+
+#### Grabbing Data
+
+Take that endpoint and turn it into data.
+
+```{python}
+
+data = APIData(endpoint=endpoint)
+data
+```
+
+There are various options for looking at the results.
+Here is the raw results from the API.
+
+```{python}
+
+# raw data
+data._raw
+```
+
+When the raw data is grabbed, basic foundational wrangles are performed
+in polars and then the lazyframes are cached into memory. Once the `APIData`
+object is created and saved there is no need to call that endpoint again
+since you'll get the raw result and many of the intermediary steps in
+the polishing process.
+
+Here is a long format that might be good for storing in a database:
+
+```{python}
+# wrangled data
+data.long().head().collect()
+```
+
+This wide format is better served for analysis:
+```{python}
+# wrangled data
+data.wide().collect()
+```
+
+### Environmental Variables for Stateless Apps
+
+There are several reusable basesettings and configuration models that when called
+will grab the variables from the environment or a .env file.  This allows
+for a near seamless transition from local dev to production. 
+
+
+## Repo Setup
+
+### Github Actions
+
+`Ruff` is used to check the project on a push or pull request.
+
+
+### Pre-Commit
+
+[pre-commit](https://pre-commit.com/) is used and configured to have `Ruff`
+fix and format code in a commit.
