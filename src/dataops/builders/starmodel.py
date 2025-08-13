@@ -41,6 +41,17 @@ class ACSStarModelBuilder(BaseModel):
 
     @computed_field
     @cached_property
+    def _strats(self) -> pl.LazyFrame:
+        """Return the stratifier data from the APIData"""
+        if isinstance(self.api_data, APIData):
+            starter = self.api_data.long()
+        else:
+            starter = self.api_data
+
+        return starter.filter(pl.col("measure_id").is_null()).collect().lazy()
+
+    @computed_field
+    @cached_property
     def _long(self) -> pl.LazyFrame:
         """Return the long data from the APIData"""
 
@@ -57,6 +68,7 @@ class ACSStarModelBuilder(BaseModel):
                 pl.col("dataset").rank("dense").alias("DimDatasetID"),
                 pl.col("value_type").rank("dense").alias("DimValueTypeID"),
             )
+            .filter(pl.col("measure_id").is_not_null())
             .collect()
             .lazy()
         )
@@ -71,8 +83,8 @@ class ACSStarModelBuilder(BaseModel):
             return self
 
         fact = self._long.drop(
-            ["universe", "concept", "endpoint", "dataset", "value_type"]
-        )
+            ["row_id", "universe", "concept", "endpoint", "dataset", "value_type"]
+        ).rename({"stratifier_id": "DimStratifierID"})
         self.fact = fact
         return self
 
@@ -140,8 +152,7 @@ class ACSStarModelBuilder(BaseModel):
             return self
 
         dim = (
-            self._long.filter(pl.col("measure_id").is_null())
-            .select(
+            self._strats.select(
                 pl.col("stratifier_id").alias("DimStratifierID"),
                 pl.col("variable"),
                 pl.col("value"),
