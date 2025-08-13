@@ -61,14 +61,14 @@ class ACSStarModelBuilder(BaseModel):
             starter = self.api_data
 
         return (
-            starter.with_columns(
+            starter.filter(pl.col("measure_id").is_not_null())
+            .with_columns(
                 pl.col("universe").rank("dense").alias("DimUniverseID"),
                 pl.col("concept").rank("dense").alias("DimConceptID"),
                 pl.col("endpoint").rank("dense").alias("DimEndpointID"),
                 pl.col("dataset").rank("dense").alias("DimDatasetID"),
                 pl.col("value_type").rank("dense").alias("DimValueTypeID"),
             )
-            .filter(pl.col("measure_id").is_not_null())
             .collect()
             .lazy()
         )
