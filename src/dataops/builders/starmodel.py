@@ -95,7 +95,11 @@ class ACSStarModelBuilder(BaseModel):
             self.dim_universe = universe.lazy()
             return self
 
-        universe = self._long.select(["DimUniverseID", "universe"]).unique()
+        universe = (
+            self._long.select(["DimUniverseID", "universe"])
+            .unique()
+            .sort(by="DimUniverseID")
+        )
 
         self.dim_universe = universe
         return self
@@ -105,7 +109,11 @@ class ACSStarModelBuilder(BaseModel):
             self.dim_concept = concept.lazy()
             return self
 
-        concept = self._long.select(["DimConceptID", "concept"]).unique()
+        concept = (
+            self._long.select(["DimConceptID", "concept"])
+            .unique()
+            .sort(by="DimConceptID")
+        )
 
         self.dim_concept = concept
         return self
@@ -117,7 +125,11 @@ class ACSStarModelBuilder(BaseModel):
             self.dim_endpoint = endpoint.lazy()
             return self
 
-        endpoint = self._long.select(["DimEndpointID", "endpoint"]).unique()
+        endpoint = (
+            self._long.select(["DimEndpointID", "endpoint"])
+            .unique()
+            .sort(by="DimEndpointID")
+        )
 
         self.dim_endpoint = endpoint
         return self
@@ -129,7 +141,11 @@ class ACSStarModelBuilder(BaseModel):
             self.dim_valuetype = valuetype.lazy()
             return self
 
-        valuetype = self._long.select(["DimValueTypeID", "value_type"]).unique()
+        valuetype = (
+            self._long.select(["DimValueTypeID", "value_type"])
+            .unique()
+            .sort(by="DimValueTypeID")
+        )
 
         self.dim_valuetype = valuetype
         return self
@@ -139,7 +155,11 @@ class ACSStarModelBuilder(BaseModel):
             self.dim_dataset = dataset.lazy()
             return self
 
-        dataset = self._long.select(["DimDatasetID", "dataset"]).unique()
+        dataset = (
+            self._long.select(["DimDatasetID", "dataset"])
+            .unique()
+            .sort(by="DimDatasetID")
+        )
 
         self.dim_dataset = dataset
         return self
@@ -160,6 +180,7 @@ class ACSStarModelBuilder(BaseModel):
             .unique()
             .collect()
             .pivot(on="variable", index="DimStratifierID", values="value")
+            .sort(by="DimStratifierID")
             .lazy()
         )
 
