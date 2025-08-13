@@ -1,9 +1,9 @@
-from src.dataops.models import CensusAPIEndpoint
+from dataops.models import acs
 
 
 def test_from_url_multi_geo():
     url = "https://api.census.gov/data/2023/acs/acs5?get=group(B19013H)&ucgid=pseudo(0400000US09$0600000)"
-    cls = CensusAPIEndpoint.from_url(url)
+    cls = acs.APIEndpoint.from_url(url)
 
     assert cls.base_url == "https://api.census.gov/data"
     assert cls.dataset == "acs/acs5"
@@ -19,7 +19,7 @@ def test_from_url_multi_geo():
 
 def test_from_url_subject():
     url = "https://api.census.gov/data/2021/acs/acs5/subject?get=group(S2701)&ucgid=0400000US09"
-    cls = CensusAPIEndpoint.from_url(url)
+    cls = acs.APIEndpoint.from_url(url)
 
     assert cls.base_url == "https://api.census.gov/data"
     assert cls.dataset == "acs/acs5/subject"
