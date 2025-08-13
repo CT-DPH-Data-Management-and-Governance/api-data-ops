@@ -112,6 +112,18 @@ class ACSStarModelBuilder(BaseModel):
         self.dim_endpoint = endpoint
         return self
 
+    def set_valuetype(
+        self, valuetype: pl.DataFrame | None = None
+    ) -> "ACSStarModelBuilder":
+        if valuetype is not None:
+            self.dim_valuetype = valuetype.lazy()
+            return self
+
+        valuetype = self._long.select(["DimValueTypeID", "value_type"]).unique()
+
+        self.dim_valuetype = valuetype
+        return self
+
     def set_stratifiers(
         self, stratifiers: pl.DataFrame | None = None
     ) -> "ACSStarModelBuilder":
