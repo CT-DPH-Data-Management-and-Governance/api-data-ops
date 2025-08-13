@@ -124,6 +124,16 @@ class ACSStarModelBuilder(BaseModel):
         self.dim_valuetype = valuetype
         return self
 
+    def set_dataset(self, dataset: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
+        if dataset is not None:
+            self.dim_dataset = dataset.lazy()
+            return self
+
+        dataset = self._long.select(["DimDatasetID", "dataset"]).unique()
+
+        self.dim_dataset = dataset
+        return self
+
     def set_stratifiers(
         self, stratifiers: pl.DataFrame | None = None
     ) -> "ACSStarModelBuilder":
