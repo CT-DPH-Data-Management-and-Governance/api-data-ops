@@ -19,10 +19,11 @@ class ACSStarModel(BaseModel):
     dim_stratifiers: pl.LazyFrame
     dim_universe: pl.LazyFrame
     dim_concept: pl.LazyFrame
+    dim_valuetype: pl.LazyFrame
     # dim measure
     dim_endpoint: pl.LazyFrame
     # dim year
-    # dim dataset
+    dim_dataset: pl.LazyFrame
 
     model_config = SettingsConfigDict(arbitrary_types_allowed=True)
 
