@@ -86,7 +86,7 @@ class APIEndpointMixin:
         _variable_string = "".join(self.variables)
         _length = len(self.variables)
         _starts_with = _variable_string.startswith("group")
-        _is_group = (_length < 2) & (_starts_with)
+        _is_group = (_length < 2) and (_starts_with)
 
         if _is_group:
             return _variable_string.removeprefix("group(").removesuffix(")")
