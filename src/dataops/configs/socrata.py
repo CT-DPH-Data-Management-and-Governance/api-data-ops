@@ -20,7 +20,7 @@ class SocrataTableID(BaseModel):
         overall = len(v) == 9
         v_parts = str.split(v, "-")
         fourbyfour = len(v_parts[0]) == len(v_parts[1])
-        if not overall & fourbyfour:
+        if not (overall and fourbyfour):
             raise ValueError(f"{v} is not a valid socrata table id")
         return v
 
