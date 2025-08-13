@@ -44,9 +44,14 @@ class ACSStarModelBuilder(BaseModel):
     @cached_property
     def _long(self) -> pl.LazyFrame:
         """Return the long data from the APIData"""
+
+        if isinstance(self.api_data, APIData):
+            starter = self.api_data.long()
+        else:
+            starter = self.api_data
+
         return (
-            self.api_data.long()
-            .with_columns(
+            starter.with_columns(
                 pl.col("universe").rank("dense").alias("DimUniverseID"),
                 pl.col("concept").rank("dense").alias("DimConceptID"),
                 pl.col("endpoint").rank("dense").alias("DimEndpointID"),
