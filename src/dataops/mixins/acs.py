@@ -107,7 +107,7 @@ class APIEndpointMixin:
         _starts_with = _variable_string.startswith("group")
         _maybe_detailed = last == middle
 
-        _is_group = (_length < 2) & (_starts_with) & (_maybe_detailed)
+        _is_group = (_length < 2) and (_starts_with) and (_maybe_detailed)
 
         tabletype = TableType.unknown
 
