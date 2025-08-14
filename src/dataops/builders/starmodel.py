@@ -258,6 +258,14 @@ class ACSStarModelBuilder(BaseModel):
         # join em back to the dataset by rowid
         # then worry about propagating to each measure
 
+        # what if we used the now unique stratifier_ids with the rows, this would
+        # uniquely identify each of the measure and geo combos. it just becomes
+        # the new rowid still. doesnt work.
+
+        # is it just the endpoint based start id?
+        # ^ no because we want a measure with the same exact set of vars to have
+        # the same dim id
+
         # new_self = (
         #     self._starter.join(dim_and_crosswalk,)
         # )
