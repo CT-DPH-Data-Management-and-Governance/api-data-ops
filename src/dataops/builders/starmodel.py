@@ -228,7 +228,8 @@ class ACSStarModelBuilder(BaseModel):
         # so we need endpoint_bnased_start_id to variablke and value combe to dim id
 
         dim_and_crosswalk = (
-            self._strats.select(
+            # self._strats.select(
+            strats.select(
                 pl.col("variable").alias("stratifier_type"),
                 pl.col("value").alias("stratifier_value"),
                 pl.col("endpoint_based_strat_id").alias("id"),
@@ -241,6 +242,23 @@ class ACSStarModelBuilder(BaseModel):
                 .alias("DimStratifierID")
             )
         )
+
+        # forget it - just join type and value to bring id along for the ride
+        # or maybe struct (type and value to create an id and bring it along?)
+        take_a_look = (
+            dim_and_crosswalk.drop("DimStratifierID")
+            .unique(["stratifier_type", "stratifier_value"], keep="first")
+            .sort("id")
+        )
+
+        # weirdly it looks like the original stratifier id works... but
+        # that seems like a bug, it should restart at 0 for each dataset
+        # so there should be more overlap.
+        # maybe a lazy optimization thing.
+        # so I need to probably just ignore all those ids
+        # go based on values. and then do a new measure id here, if I can?
+
+        # starter.join(take_a_look, left_on=["variable", "value"], right_on=["stratifier_type", "stratifier_value"])
 
         dim = (
             dim_and_crosswalk.select(
