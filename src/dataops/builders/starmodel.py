@@ -50,6 +50,39 @@ class ACSStarModelBuilder(BaseModel):
         starter = (
             # need universal ids to join stuff back up
             # or couch things in when then otherwise type of stuff
+            user_input.collect()
+            .with_columns(
+                pl.lit(None).cast(pl.UInt32).alias("DimUniverseID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimConceptID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimEndpointID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
+            )
+            .with_columns(
+                pl.struct(["endpoint", "stratifier_id"])
+                .rank("dense")
+                .alias("endpoint_based_strat_id"),
+                pl.when(pl.col("measure_id").is_not_null())
+                .then(
+                    pl.struct(
+                        pl.col("universe").rank("dense").alias("DimUniverseID"),
+                        pl.col("concept").rank("dense").alias("DimConceptID"),
+                        pl.col("endpoint").rank("dense").alias("DimEndpointID"),
+                        pl.col("dataset").rank("dense").alias("DimDatasetID"),
+                        pl.col("value_type").rank("dense").alias("DimValueTypeID"),
+                    )
+                )
+                .otherwise(
+                    pl.struct(
+                        "DimUniverseID",
+                        "DimConceptID",
+                        "DimEndpointID",
+                        "DimDatasetID",
+                        "DimValueTypeID",
+                    )
+                )
+                .struct.unnest(),
+            )
         )
 
         return starter
