@@ -41,33 +41,49 @@ class ACSStarModelBuilder(BaseModel):
 
     @computed_field
     @cached_property
-    def _strats(self) -> pl.LazyFrame:
-        """Return the stratifier data from the APIData"""
+    def _starter(self) -> pl.LazyFrame:
         if isinstance(self.api_data, APIData):
-            starter = self.api_data.long()
+            user_input = self.api_data.long()
         else:
-            starter = self.api_data
+            user_input = self.api_data
 
-        return starter.filter(pl.col("measure_id").is_null()).collect().lazy()
+        starter = (
+            # need universal ids to join stuff back up
+            # or couch things in when then otherwise type of stuff
+        )
+
+        return starter
 
     @computed_field
-    @cached_property
+    @property
+    def _strats(self) -> pl.LazyFrame:
+        """Return the stratifier data from the APIData"""
+
+        return (
+            self._starter.filter(pl.col("measure_id").is_null())
+            .with_columns(
+                pl.struct(["variable", "value"]).rank("dense").alias("DimStratifierID")
+            )
+            .collect()
+            .lazy()
+        )
+
+    @computed_field
+    @property
     def _long(self) -> pl.LazyFrame:
         """Return the long data from the APIData"""
 
-        if isinstance(self.api_data, APIData):
-            starter = self.api_data.long()
-        else:
-            starter = self.api_data
-
         return (
-            starter.filter(pl.col("measure_id").is_not_null())
+            self._starter.filter(pl.col("measure_id").is_not_null())
             .with_columns(
                 pl.col("universe").rank("dense").alias("DimUniverseID"),
                 pl.col("concept").rank("dense").alias("DimConceptID"),
                 pl.col("endpoint").rank("dense").alias("DimEndpointID"),
                 pl.col("dataset").rank("dense").alias("DimDatasetID"),
                 pl.col("value_type").rank("dense").alias("DimValueTypeID"),
+                pl.struct(["endpoint", "stratifier_id"])
+                .rank("dense")
+                .alias("unique_stratifier_id"),
             )
             .collect()
             .lazy()
@@ -164,7 +180,7 @@ class ACSStarModelBuilder(BaseModel):
         self.dim_dataset = dataset
         return self
 
-    def set_stratifiers(
+    def set_stratifiers_wide(
         self, stratifiers: pl.DataFrame | None = None
     ) -> "ACSStarModelBuilder":
         if stratifiers is not None:
@@ -182,6 +198,27 @@ class ACSStarModelBuilder(BaseModel):
             .pivot(on="variable", index="DimStratifierID", values="value")
             .sort(by="DimStratifierID")
             .lazy()
+        )
+
+        self.dim_stratifiers = dim
+        return self
+
+    def set_stratifiers_long(
+        self, stratifiers: pl.DataFrame | None = None
+    ) -> "ACSStarModelBuilder":
+        if stratifiers is not None:
+            self.dim_stratifiers = stratifiers.lazy()
+            return self
+
+        dim = (
+            self._strats.with_columns()
+            .select(
+                pl.col("stratifier_id").alias("DimStratifierID"),
+                pl.col("variable").alias("stratifier_type"),
+                pl.col("value").alias("stratifier_value"),
+            )
+            .unique()
+            .sort(by="DimStratifierID")
         )
 
         self.dim_stratifiers = dim
