@@ -92,39 +92,14 @@ class ACSStarModelBuilder(BaseModel):
     def _strats(self) -> pl.LazyFrame:
         """Return the stratifier data from the APIData"""
 
-        return (
-            self._starter.filter(pl.col("measure_id").is_null())
-            .with_columns(
-                pl.struct(["variable", "value"]).rank("dense").alias("DimStratifierID")
-            )
-            .collect()
-            .lazy()
-        )
+        return self._starter.filter(pl.col("measure_id").is_null()).collect().lazy()
 
     @computed_field
     @property
     def _long(self) -> pl.LazyFrame:
         """Return the long data from the APIData"""
 
-        return (
-            self._starter.filter(pl.col("measure_id").is_not_null())
-            .with_columns(
-                pl.col("universe").rank("dense").alias("DimUniverseID"),
-                pl.col("concept").rank("dense").alias("DimConceptID"),
-                pl.col("endpoint").rank("dense").alias("DimEndpointID"),
-                pl.col("dataset").rank("dense").alias("DimDatasetID"),
-                pl.col("value_type").rank("dense").alias("DimValueTypeID"),
-                pl.struct(["endpoint", "stratifier_id"])
-                .rank("dense")
-                .alias("unique_stratifier_id"),
-            )
-            .collect()
-            .lazy()
-        )
-        # create IDs for each one of the dim domains
-        # int ids that are premade will need to be  "grouped by" a composite id
-        # universe, concept and other strings are likely cross cutting by design
-        # so the unique values of the var itself should be good
+        return self._starter.filter(pl.col("measure_id").is_not_null()).collect().lazy()
 
     def set_fact(self, fact: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
         if fact is not None:
@@ -236,12 +211,72 @@ class ACSStarModelBuilder(BaseModel):
         self.dim_stratifiers = dim
         return self
 
+    def set_stratifiers(
+        self, stratifiers: pl.DataFrame | None = None
+    ) -> "ACSStarModelBuilder":
+        if stratifiers is not None:
+            self.dim_stratifiers = stratifiers.lazy()
+            return self
+
+        # go wide, create IDS, then go long
+        # join back to a starter frame, and then overwrite starter with it
+        # return both with self
+
+        # doesnt work
+
+        # endpoint_based_start_id works almost, there are some doubled up values
+        # so we need endpoint_bnased_start_id to variablke and value combe to dim id
+
+        dim_and_crosswalk = (
+            self._strats.select(
+                pl.col("variable").alias("stratifier_type"),
+                pl.col("value").alias("stratifier_value"),
+                pl.col("endpoint_based_strat_id").alias("id"),
+            )
+            .unique()
+            .sort("id")
+            .with_columns(
+                pl.struct("stratifier_type", "stratifier_value")
+                .rank("dense")
+                .alias("DimStratifierID")
+            )
+        )
+
+        dim = (
+            dim_and_crosswalk.select(
+                ["DimStratifierID", "stratifier_type", "stratifier_value"]
+            )
+            .unique()
+            .sort("DimStratifierID")
+        )
+
+        dim_and_crosswalk = dim_and_crosswalk.select(["id", "DimStratifierID"])
+
+        # ack doesnt quite work
+
+        # I just need to ONLY  dim the variable and value combos
+        # join em back to the dataset by rowid
+        # then worry about propagating to each measure
+
+        # new_self = (
+        #     self._starter.join(dim_and_crosswalk,)
+        # )
+
+        self.dim_stratifiers = dim
+        return self
+
     def set_stratifiers_long(
         self, stratifiers: pl.DataFrame | None = None
     ) -> "ACSStarModelBuilder":
         if stratifiers is not None:
             self.dim_stratifiers = stratifiers.lazy()
             return self
+
+        measure_to_strat = (
+            self._starter.select(["measure_id", "endpoint_based_strat_id"])
+            .drop_nulls()
+            .unique()
+        )
 
         dim = (
             self._strats.with_columns()

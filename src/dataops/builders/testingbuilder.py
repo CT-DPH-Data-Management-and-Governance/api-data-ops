@@ -1,4 +1,4 @@
-from dataops.builders.starmodel import ACSStarModel, ACSStarModelBuilder
+from dataops.builders.starmodel import ACSStarModelBuilder
 from dataops.apis.acs import APIData, APIEndpoint
 import polars as pl
 
@@ -58,6 +58,8 @@ longest = pl.concat(all_frames)
 builder = ACSStarModelBuilder(api_data=longest)
 
 builder._strats.collect()
+builder._starter.collect()
+
 builder._strats.select(["value", "variable", "DimStratifierID"]).collect()
 builder._long.collect()
 
@@ -107,4 +109,21 @@ builder.build()
     .collect()
     .with_columns(pl.col("universe").rank("dense").alias("DimUniverseID"))
     .select(["universe", "DimUniverseID"])
+)
+
+
+(starter.select(["measure_id", "endpoint_based_strat_id"]).drop_nulls().unique())
+
+# ugly
+(
+    starter.filter(pl.col("measure_id").is_null())
+    .select(["variable", "value"])
+    .unique()
+    .sort(["variable", "value"])
+    .with_row_index(name="DimStratifierID", offset=1)
+    .select(
+        pl.col("DimStratifierID"),
+        pl.col("variable").alias("stratifier_type"),
+        pl.col("value").alias("stratifier_value"),
+    )
 )
