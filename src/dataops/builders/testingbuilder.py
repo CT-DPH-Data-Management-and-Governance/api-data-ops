@@ -74,10 +74,48 @@ variable_sets = (
     .with_columns(pl.struct("variable_set").rank("dense").alias("variable_set_id"))
 )
 
+variable_set_ids = variable_sets.select(["variable_set_id", "variable_set"]).unique()
 
-builder._strats.select(["value", "variable", "DimStratifierID"]).collect()
+var_values_wids = var_values.join(
+    variable_sets, on="endpoint_based_strat_id", how="left"
+)
+
+dim_starter = (
+    var_values_wids.select(
+        ["variable_set_id", "endpoint_based_strat_id", "variable", "value"]
+    )
+    .pivot(
+        on="variable",
+        index=["variable_set_id", "endpoint_based_strat_id"],
+        values="value",
+    )
+    .with_columns(
+        pl.struct(pl.exclude("endpoint_based_strat_id"))
+        .rank("dense")
+        .alias("var_set_value_id")
+    )
+)
+
+dim_walk = (
+    dim_starter.select(
+        pl.col("var_set_value_id").alias("DimStratifierID"),
+        pl.exclude(["variable_set_id", "var_set_value_id"]),
+    )
+    .unpivot(index=["DimStratifierID", "endpoint_based_strat_id"])
+    .sort("DimStratifierID", "endpoint_based_strat_id")
+)
+
+dim_stratifier = (
+    dim_walk.drop("endpoint_based_strat_id")
+    .unique()
+    .sort("DimStratifierID")
+    .rename({"variable": "stratifier_variable", "value": "stratifier_value"})
+)
+
+dim_crosswalk = dim_walk.select(["endpoint_based_strat_id", "DimStratifierID"]).unique()
 
 # okay join up variable set, group by variable set, and grab unique values
+# unique SETS of values, do a struct or list or something
 
 builder._long.collect()
 
