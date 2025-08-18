@@ -11,36 +11,36 @@ u5 = "https://api.census.gov/data/2022/acs/acs1?get=group(B19013I)&ucgid=0400000
 
 urls = [u1, u2, u3, u4, u5]
 
-url = u2
+# url = u2
 
-example = APIEndpoint.from_url(url)
-example
+# example = APIEndpoint.from_url(url)
+# example
 
-data = APIData(endpoint=example)
-data.long().head().collect()
+# data = APIData(endpoint=example)
+# data.long().head().collect()
 
-builder = ACSStarModelBuilder(api_data=data)
-builder._strats.collect()
-builder._long.collect()
+# builder = ACSStarModelBuilder(api_data=data)
+# builder._strats.collect()
+# builder._long.collect()
 
-star = (
-    builder.set_fact()
-    .set_concept()
-    .set_endpoint()
-    .set_stratifiers_wide()
-    .set_stratifiers_long()
-    .set_valuetype()
-    .set_dataset()
-    .set_universe()
-    .build()
-)
-star.fact.collect()
-star.dim_concept.collect()
-star.dim_stratifiers.collect()
-star.dim_valuetype.collect()
-star.dim_universe.collect()
-star.dim_dataset.collect()
-star.dim_endpoint.collect()
+# star = (
+#     builder.set_fact()
+#     .set_concept()
+#     .set_endpoint()
+#     .set_stratifiers_wide()
+#     .set_stratifiers_long()
+#     .set_valuetype()
+#     .set_dataset()
+#     .set_universe()
+#     .build()
+# )
+# star.fact.collect()
+# star.dim_concept.collect()
+# star.dim_stratifiers.collect()
+# star.dim_valuetype.collect()
+# star.dim_universe.collect()
+# star.dim_dataset.collect()
+# star.dim_endpoint.collect()
 
 
 # now append em all and figure it out
@@ -59,6 +59,23 @@ longest = pl.concat(all_frames)
 
 
 builder = ACSStarModelBuilder(api_data=longest)
+
+# builder._long.collect()
+
+star = (
+    builder.set_stratifiers()
+    .set_concept()
+    .set_endpoint()
+    .set_valuetype()
+    .set_dataset()
+    .set_universe()
+    .set_measure()
+    .set_fact()
+    .build()
+)
+
+star.fact.collect()
+star.dim_stratifiers.collect()
 
 builder._strats.collect()
 builder._starter.collect()
