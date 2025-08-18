@@ -20,7 +20,7 @@ class ACSStarModel(BaseModel):
     dim_universe: pl.LazyFrame
     dim_concept: pl.LazyFrame
     dim_valuetype: pl.LazyFrame
-    # dim measure
+    dim_measure: pl.LazyFrame
     dim_endpoint: pl.LazyFrame
     dim_dataset: pl.LazyFrame
 
@@ -28,8 +28,9 @@ class ACSStarModel(BaseModel):
 
 
 class ACSStarModelBuilder(BaseModel):
-    api_data: APIData | pl.LazyFrame  # add validations to check if APIData.long()
+    api_data: APIData | pl.LazyFrame
     fact: pl.LazyFrame = pl.LazyFrame()
+    dim_measure: pl.LazyFrame = pl.LazyFrame()
     dim_stratifiers: pl.LazyFrame = pl.LazyFrame()
     dim_universe: pl.LazyFrame = pl.LazyFrame()
     dim_concept: pl.LazyFrame = pl.LazyFrame()
@@ -56,31 +57,37 @@ class ACSStarModelBuilder(BaseModel):
                 pl.lit(None).cast(pl.UInt32).alias("DimEndpointID"),
                 pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
                 pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
-            ).with_columns(
+                pl.lit(None).cast(pl.UInt32).alias("DimMeasureID"),
+            )
+            .with_columns(
                 pl.struct(["endpoint", "stratifier_id"])
                 .rank("dense")
                 .alias("endpoint_based_strat_id"),
-                pl.when(pl.col("measure_id").is_not_null())
-                .then(
+                pl.when(pl.col("measure_id").is_not_null()).then(
                     pl.struct(
                         pl.col("universe").rank("dense").alias("DimUniverseID"),
                         pl.col("concept").rank("dense").alias("DimConceptID"),
                         pl.col("endpoint").rank("dense").alias("DimEndpointID"),
                         pl.col("dataset").rank("dense").alias("DimDatasetID"),
                         pl.col("value_type").rank("dense").alias("DimValueTypeID"),
+                        pl.struct(["endpoint", "measure_id"])
+                        .rank("dense")
+                        .alias("DimMeasureID"),
                     )
-                )
-                .otherwise(
-                    pl.struct(
-                        "DimUniverseID",
-                        "DimConceptID",
-                        "DimEndpointID",
-                        "DimDatasetID",
-                        "DimValueTypeID",
-                    )
+                ),
+            )
+            .otherwise(
+                pl.struct(
+                    "DimUniverseID",
+                    "DimConceptID",
+                    "DimEndpointID",
+                    "DimDatasetID",
+                    "DimValueTypeID",
+                    "DimMeasureID",
                 )
                 .struct.unnest(),
             )
+            .struct.unnest(),
         )
 
         return starter
@@ -108,6 +115,20 @@ class ACSStarModelBuilder(BaseModel):
             ["row_id", "universe", "concept", "endpoint", "dataset", "value_type"]
         ).rename({"stratifier_id": "DimStratifierID"})
         self.fact = fact
+        return self
+
+    def set_measure(self, measure: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
+        if measure is not None:
+            self.dim_measure = measure.lazy()
+            return self
+
+        measure = (
+            self._long.select(["DimMeasureID", "Measure"])
+            .unique()
+            .sort(by="DimMeasureID")
+        )
+
+        self.dim_measure = measure
         return self
 
     def set_universe(
@@ -326,6 +347,7 @@ class ACSStarModelBuilder(BaseModel):
         """Builds and returns the final model"""
         return ACSStarModel(
             fact=self.fact,
+            dim_measure=self.dim_measure,
             dim_stratifiers=self.dim_stratifiers,
             dim_universe=self.dim_universe,
             dim_concept=self.dim_concept,
