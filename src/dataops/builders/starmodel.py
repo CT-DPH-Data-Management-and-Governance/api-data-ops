@@ -207,29 +207,6 @@ class ACSStarModelBuilder(BaseModel):
         self.dim_dataset = dataset
         return self
 
-    def set_stratifiers_wide(
-        self, stratifiers: pl.DataFrame | None = None
-    ) -> "ACSStarModelBuilder":
-        if stratifiers is not None:
-            self.dim_stratifiers = stratifiers.lazy()
-            return self
-
-        dim = (
-            self._strats.select(
-                pl.col("stratifier_id").alias("DimStratifierID"),
-                pl.col("variable"),
-                pl.col("value"),
-            )
-            .unique()
-            .collect()
-            .pivot(on="variable", index="DimStratifierID", values="value")
-            .sort(by="DimStratifierID")
-            .lazy()
-        )
-
-        self.dim_stratifiers = dim
-        return self
-
     def set_stratifiers(
         self, stratifiers: pl.DataFrame | None = None
     ) -> "ACSStarModelBuilder":
@@ -237,111 +214,67 @@ class ACSStarModelBuilder(BaseModel):
             self.dim_stratifiers = stratifiers.lazy()
             return self
 
-        # go wide, create IDS, then go long
-        # join back to a starter frame, and then overwrite starter with it
-        # return both with self
+        var_values = self._strats.select(
+            ["value", "variable", "endpoint_based_strat_id"]
+        )
 
-        # doesnt work
-
-        # endpoint_based_start_id works almost, there are some doubled up values
-        # so we need endpoint_bnased_start_id to variablke and value combe to dim id
-
-        dim_and_crosswalk = (
-            # self._strats.select(
-            strats.select(
-                pl.col("variable").alias("stratifier_type"),
-                pl.col("value").alias("stratifier_value"),
-                pl.col("endpoint_based_strat_id").alias("id"),
-            )
-            .unique()
-            .sort("id")
+        variable_sets = (
+            var_values.select(["variable", "endpoint_based_strat_id"])
+            .sort(["endpoint_based_strat_id", "variable"])
+            .group_by("endpoint_based_strat_id", maintain_order=True)
+            .agg(pl.col("variable").unique(maintain_order=True).alias("variable_set"))
             .with_columns(
-                pl.struct("stratifier_type", "stratifier_value")
+                pl.struct("variable_set").rank("dense").alias("variable_set_id")
+            )
+        )
+
+        var_values_wids = var_values.join(
+            variable_sets, on="endpoint_based_strat_id", how="left"
+        )
+
+        dim_starter = (
+            var_values_wids.select(
+                ["variable_set_id", "endpoint_based_strat_id", "variable", "value"]
+            )
+            .collect()
+            .pivot(
+                on="variable",
+                index=["variable_set_id", "endpoint_based_strat_id"],
+                values="value",
+            )
+            .lazy()
+            .with_columns(
+                pl.struct(pl.exclude("endpoint_based_strat_id"))
                 .rank("dense")
-                .alias("DimStratifierID")
+                .alias("var_set_value_id")
             )
         )
 
-        # forget it - just join type and value to bring id along for the ride
-        # or maybe struct (type and value to create an id and bring it along?)
-        take_a_look = (
-            dim_and_crosswalk.drop("DimStratifierID")
-            .unique(["stratifier_type", "stratifier_value"], keep="first")
-            .sort("id")
+        dim_walk = (
+            dim_starter.select(
+                pl.col("var_set_value_id").alias("DimStratifierID"),
+                pl.exclude(["variable_set_id", "var_set_value_id"]),
+            )
+            .unpivot(index=["DimStratifierID", "endpoint_based_strat_id"])
+            .sort("DimStratifierID", "endpoint_based_strat_id")
         )
 
-        # weirdly it looks like the original stratifier id works... but
-        # that seems like a bug, it should restart at 0 for each dataset
-        # so there should be more overlap.
-        # maybe a lazy optimization thing.
-        # so I need to probably just ignore all those ids
-        # go based on values. and then do a new measure id here, if I can?
-
-        # starter.join(take_a_look, left_on=["variable", "value"], right_on=["stratifier_type", "stratifier_value"])
-
-        dim = (
-            dim_and_crosswalk.select(
-                ["DimStratifierID", "stratifier_type", "stratifier_value"]
-            )
+        dim_stratifier = (
+            dim_walk.drop("endpoint_based_strat_id")
             .unique()
             .sort("DimStratifierID")
+            .rename({"variable": "stratifier_variable", "value": "stratifier_value"})
         )
 
-        dim_and_crosswalk = dim_and_crosswalk.select(["id", "DimStratifierID"])
+        dim_crosswalk = dim_walk.select(
+            ["endpoint_based_strat_id", "DimStratifierID"]
+        ).unique()
 
-        # ack doesnt quite work
-
-        # I just need to ONLY  dim the variable and value combos
-        # join em back to the dataset by rowid
-        # then worry about propagating to each measure
-
-        # what if we used the now unique stratifier_ids with the rows, this would
-        # uniquely identify each of the measure and geo combos. it just becomes
-        # the new rowid still. doesnt work.
-
-        # is it just the endpoint based start id?
-        # ^ no because we want a measure with the same exact set of vars to have
-        # the same dim id
-
-        # new_self = (
-        #     self._starter.join(dim_and_crosswalk,)
-        # )
-
-        self.dim_stratifiers = dim
+        self.dim_stratifiers = dim_stratifier
+        self._starter = self._long.join(
+            dim_crosswalk, on="endpoint_based_strat_id", how="left"
+        )
         return self
-
-    def set_stratifiers_long(
-        self, stratifiers: pl.DataFrame | None = None
-    ) -> "ACSStarModelBuilder":
-        if stratifiers is not None:
-            self.dim_stratifiers = stratifiers.lazy()
-            return self
-
-        measure_to_strat = (
-            self._starter.select(["measure_id", "endpoint_based_strat_id"])
-            .drop_nulls()
-            .unique()
-        )
-
-        dim = (
-            self._strats.with_columns()
-            .select(
-                pl.col("stratifier_id").alias("DimStratifierID"),
-                pl.col("variable").alias("stratifier_type"),
-                pl.col("value").alias("stratifier_value"),
-            )
-            .unique()
-            .sort(by="DimStratifierID")
-        )
-
-        self.dim_stratifiers = dim
-        return self
-
-    # TODO set_stnd_stratifiers so like take NAME if it exists otherwise use an algo
-
-    # def set_acs_data(self, acs_data: APIData) -> "ACSStarModelBuilder":
-    #     self.data["acs_data"] = acs_data
-    #     return self
 
     def build(self) -> ACSStarModel:
         """Builds and returns the final model"""
