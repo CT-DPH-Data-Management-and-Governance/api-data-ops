@@ -212,7 +212,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 .alias("measure"),
             )
             .sort(["stratifier_id", "variable"])
-            .with_row_index("row_id")
+            .with_row_index("row_id", offset=1)
             .select(order)
             .collect()
             .lazy()
