@@ -1,15 +1,12 @@
 import polars as pl
+import polars.selectors as cs
+from datetime import datetime as dt
 
-from dataops.apis.acs import APIData, APIEndpoint
-from typing import Annotated, List
+from dataops.apis.acs import APIData
 from functools import cached_property
 from pydantic import (
     BaseModel,
     computed_field,
-    Field,
-    HttpUrl,
-    SecretStr,
-    ValidationError,
 )
 from pydantic_settings import SettingsConfigDict
 
@@ -48,45 +45,41 @@ class ACSStarModelBuilder(BaseModel):
         else:
             user_input = self.api_data
 
-        starter = (
-            # need universal ids to join stuff back up
-            # or couch things in when then otherwise type of stuff
-            user_input.with_columns(
-                pl.lit(None).cast(pl.UInt32).alias("DimUniverseID"),
-                pl.lit(None).cast(pl.UInt32).alias("DimConceptID"),
-                pl.lit(None).cast(pl.UInt32).alias("DimEndpointID"),
-                pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
-                pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
-                pl.lit(None).cast(pl.UInt32).alias("DimMeasureID"),
-            ).with_columns(
-                pl.struct(["endpoint", "stratifier_id"])
-                .rank("dense")
-                .alias("endpoint_based_strat_id"),
-                pl.when(pl.col("measure_id").is_not_null())
-                .then(
-                    pl.struct(
-                        pl.col("universe").rank("dense").alias("DimUniverseID"),
-                        pl.col("concept").rank("dense").alias("DimConceptID"),
-                        pl.col("endpoint").rank("dense").alias("DimEndpointID"),
-                        pl.col("dataset").rank("dense").alias("DimDatasetID"),
-                        pl.col("value_type").rank("dense").alias("DimValueTypeID"),
-                        pl.struct(["endpoint", "measure_id"])
-                        .rank("dense")
-                        .alias("DimMeasureID"),
-                    )
+        starter = user_input.with_columns(
+            pl.lit(None).cast(pl.UInt32).alias("DimUniverseID"),
+            pl.lit(None).cast(pl.UInt32).alias("DimConceptID"),
+            pl.lit(None).cast(pl.UInt32).alias("DimEndpointID"),
+            pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
+            pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
+            pl.lit(None).cast(pl.UInt32).alias("DimMeasureID"),
+        ).with_columns(
+            pl.struct(["endpoint", "stratifier_id"])
+            .rank("dense")
+            .alias("endpoint_based_strat_id"),
+            pl.when(pl.col("measure_id").is_not_null())
+            .then(
+                pl.struct(
+                    pl.col("universe").rank("dense").alias("DimUniverseID"),
+                    pl.col("concept").rank("dense").alias("DimConceptID"),
+                    pl.col("endpoint").rank("dense").alias("DimEndpointID"),
+                    pl.col("dataset").rank("dense").alias("DimDatasetID"),
+                    pl.col("value_type").rank("dense").alias("DimValueTypeID"),
+                    pl.struct(["endpoint", "measure_id"])
+                    .rank("dense")
+                    .alias("DimMeasureID"),
                 )
-                .otherwise(
-                    pl.struct(
-                        "DimUniverseID",
-                        "DimConceptID",
-                        "DimEndpointID",
-                        "DimDatasetID",
-                        "DimValueTypeID",
-                        "DimMeasureID",
-                    )
-                )
-                .struct.unnest(),
             )
+            .otherwise(
+                pl.struct(
+                    "DimUniverseID",
+                    "DimConceptID",
+                    "DimEndpointID",
+                    "DimDatasetID",
+                    "DimValueTypeID",
+                    "DimMeasureID",
+                )
+            )
+            .struct.unnest(),
         )
 
         return starter
@@ -110,20 +103,36 @@ class ACSStarModelBuilder(BaseModel):
             self.fact = fact.lazy()
             return self
 
-        fact = self._long.drop(
-            [
-                "row_id",
-                "universe",
-                "concept",
-                "endpoint",
-                "dataset",
-                "value_type",
-                "stratifier_id",
-                "endpoint_based_strat_id",
-                "measure_id",
-                "measure",
-            ]
+        now = dt.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        fact = (
+            self._long.drop(
+                [
+                    "row_id",
+                    "universe",
+                    "concept",
+                    "endpoint",
+                    "dataset",
+                    "value_type",
+                    "stratifier_id",
+                    "endpoint_based_strat_id",
+                    "measure_id",
+                    "measure",
+                ]
+            )
+            .with_row_index(name="FactACSID", offset=1)
+            .select(
+                pl.col("FactACSID"),
+                pl.col("value").alias("value_text"),
+                pl.col("value").cast(pl.Float64, strict=False).alias("value_numeric"),
+                pl.col("year"),
+                cs.starts_with("Dim"),
+                pl.col("date_pulled"),
+                pl.lit(now).alias("CreatedOn"),
+                pl.lit(now).alias("ModifiedOn"),
+            )
         )
+
         self.fact = fact
         return self
 
@@ -280,10 +289,13 @@ class ACSStarModelBuilder(BaseModel):
             ["endpoint_based_strat_id", "DimStratifierID"]
         ).unique()
 
-        self.dim_stratifiers = dim_stratifier
-        self._starter = self._long.join(
+        new_starter = self._starter.join(
             dim_crosswalk, on="endpoint_based_strat_id", how="left"
         )
+
+        self.dim_stratifiers = dim_stratifier
+        self._starter = new_starter
+
         return self
 
     def build(self) -> ACSStarModel:
