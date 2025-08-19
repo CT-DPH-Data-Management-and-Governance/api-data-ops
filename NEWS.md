@@ -1,4 +1,15 @@
-## V0.8.0
+## v0.9.0
+
+> Note: This package is in active development, expect breaking changes.
+
+### Features
+
+- Breaking: Updated minimum python version to 3.13.6
+- Added `builder` subpackage with builder methods for creating a star model
+in memory.
+
+
+## v0.8.0
 
 > Note: This package is in active development, expect breaking changes.
 

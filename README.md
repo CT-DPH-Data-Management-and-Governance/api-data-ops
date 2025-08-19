@@ -112,11 +112,11 @@ data.long().head().collect()
 | stratifier_id | row_id | measure_id | universe | concept | measure | value_type | value | variable | endpoint | year | dataset | date_pulled |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|
 | u32 | u32 | i64 | str | str | str | str | str | str | str | i32 | str | datetime\[μs\] |
-| 0 | 0 | 1 | "Households with a householder … | "Median Household Income in the… | "estimate" | "estimate" | "60275" | "B19013I_001E" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-13 10:49:18.824543 |
-| 0 | 1 | 1 | "Households with a householder … | "Median Household Income in the… | "annotation of estimate" | "annotation of estimate" | null | "B19013I_001EA" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-13 10:49:18.824543 |
-| 0 | 2 | 1 | "Households with a householder … | "Median Household Income in the… | "margin of error" | "margin of error" | "4773" | "B19013I_001M" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-13 10:49:18.824543 |
-| 0 | 3 | 1 | "Households with a householder … | "Median Household Income in the… | "annotation of margin of error" | "annotation of margin of error" | null | "B19013I_001MA" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-13 10:49:18.824543 |
-| 0 | 4 | null | "Households with a householder … | "Median Household Income in the… | "GEO_ID" | "GEO_ID" | "0400000US09" | "GEO_ID" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-13 10:49:18.824543 |
+| 1 | 1 | 1 | "Households with a householder … | "Median Household Income in the… | "estimate" | "estimate" | "60275" | "B19013I_001E" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-19 12:35:05.836530 |
+| 1 | 2 | 1 | "Households with a householder … | "Median Household Income in the… | "annotation of estimate" | "annotation of estimate" | null | "B19013I_001EA" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-19 12:35:05.836530 |
+| 1 | 3 | 1 | "Households with a householder … | "Median Household Income in the… | "margin of error" | "margin of error" | "4773" | "B19013I_001M" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-19 12:35:05.836530 |
+| 1 | 4 | 1 | "Households with a householder … | "Median Household Income in the… | "annotation of margin of error" | "annotation of margin of error" | null | "B19013I_001MA" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-19 12:35:05.836530 |
+| 1 | 5 | null | "Households with a householder … | "Median Household Income in the… | "GEO_ID" | "GEO_ID" | "0400000US09" | "GEO_ID" | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-19 12:35:05.836530 |
 
 </div>
 
@@ -136,10 +136,79 @@ data.wide().collect()
 </style>
 <small>shape: (1, 16)</small>
 
-| row_id | stratifier_id | name | geo_id | ucgid | universe | concept | measure | estimate | annotation of estimate | margin of error | annotation of margin of error | endpoint | year | dataset | date_pulled |
+| row_id | stratifier_id | geo_id | ucgid | name | universe | concept | measure | estimate | annotation of estimate | margin of error | annotation of margin of error | endpoint | year | dataset | date_pulled |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
 | u32 | u32 | str | str | str | str | str | str | str | str | str | str | str | i32 | str | datetime\[μs\] |
-| 0 | 0 | "Connecticut" | "0400000US09" | "0400000US09" | "Households with a householder … | "Median Household Income in the… | "median household income in the… | "60275" | null | "4773" | null | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-13 10:49:18.824543 |
+| 0 | 1 | "0400000US09" | "0400000US09" | "Connecticut" | "Households with a householder … | "Median Household Income in the… | "median household income in the… | "60275" | null | "4773" | null | "https://api.census.gov/data/20… | 2022 | "acs/acs1" | 2025-08-19 12:35:05.836530 |
+
+</div>
+
+#### Star Model
+
+You can take an instance of the class `APIData` or a collection of
+several `APIData.long()` lazyframes `pl.concat()` together and conver
+them into a star model with an in-memory “fact” table and “dimensions”.
+
+``` python
+from dataops.builders import starmodel as sm
+
+builder = sm.ACSStarModelBuilder(api_data=data)
+
+star = (
+    builder.set_stratifiers()
+    .set_concept()
+    .set_endpoint()
+    .set_valuetype()
+    .set_dataset()
+    .set_universe()
+    .set_measure()
+    .set_fact()
+    .build()
+)
+```
+
+``` python
+star.fact.head().collect()
+```
+
+<div><style>
+.dataframe > thead > tr,
+.dataframe > tbody > tr {
+  text-align: right;
+  white-space: pre-wrap;
+}
+</style>
+<small>shape: (4, 14)</small>
+
+| FactACSID | value_text | value_numeric | year | DimUniverseID | DimConceptID | DimEndpointID | DimDatasetID | DimValueTypeID | DimMeasureID | DimStratifierID | date_pulled | CreatedOn | ModifiedOn |
+|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| u32 | str | f64 | i32 | u32 | u32 | u32 | u32 | u32 | u32 | u32 | datetime\[μs\] | str | str |
+| 1 | "60275" | 60275.0 | 2022 | 1 | 2 | 1 | 1 | 5 | 2 | 1 | 2025-08-19 12:35:05.836530 | "2025-08-19 12:35:05" | "2025-08-19 12:35:05" |
+| 2 | null | null | 2022 | 1 | 2 | 1 | 1 | 3 | 2 | 1 | 2025-08-19 12:35:05.836530 | "2025-08-19 12:35:05" | "2025-08-19 12:35:05" |
+| 3 | "4773" | 4773.0 | 2022 | 1 | 2 | 1 | 1 | 6 | 2 | 1 | 2025-08-19 12:35:05.836530 | "2025-08-19 12:35:05" | "2025-08-19 12:35:05" |
+| 4 | null | null | 2022 | 1 | 2 | 1 | 1 | 4 | 2 | 1 | 2025-08-19 12:35:05.836530 | "2025-08-19 12:35:05" | "2025-08-19 12:35:05" |
+
+</div>
+
+``` python
+star.dim_stratifiers.collect()
+```
+
+<div><style>
+.dataframe > thead > tr,
+.dataframe > tbody > tr {
+  text-align: right;
+  white-space: pre-wrap;
+}
+</style>
+<small>shape: (3, 3)</small>
+
+| DimStratifierID | stratifier_variable | stratifier_value |
+|-----------------|---------------------|------------------|
+| u32             | str                 | str              |
+| 1               | "GEO_ID"            | "0400000US09"    |
+| 1               | "NAME"              | "Connecticut"    |
+| 1               | "ucgid"             | "0400000US09"    |
 
 </div>
 
