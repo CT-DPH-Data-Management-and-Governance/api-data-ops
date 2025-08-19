@@ -212,12 +212,12 @@ class APIDataMixin:
 
         output = (
             pl.LazyFrame(data=raw[1:], schema=raw[0], orient="row")
-            .with_row_index(name="stratifier_id")
+            .with_row_index(name="stratifier_id", offset=1)
             .unpivot(
                 index="stratifier_id", value_name="value", variable_name="variable"
             )
             .join(relevant_variable_labels, how="left", on="variable")
-            .with_row_index("row_id")
+            .with_row_index("row_id", offset=1)
             .with_columns(date_pulled=dt.now())
             .select(final_cols)
         )

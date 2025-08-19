@@ -81,6 +81,41 @@ This wide format is better served for analysis:
 data.wide().collect()
 ```
 
+#### Star Model
+
+You can take an instance of the class `APIData` or a collection of several
+`APIData.long()` lazyframes `pl.concat()` together and conver them into
+a star model with an in-memory "fact" table and "dimensions".
+
+
+```{python}
+from dataops.builders import starmodel as sm
+
+builder = sm.ACSStarModelBuilder(api_data=data)
+
+star = (
+    builder.set_stratifiers()
+    .set_concept()
+    .set_endpoint()
+    .set_valuetype()
+    .set_dataset()
+    .set_universe()
+    .set_measure()
+    .set_fact()
+    .build()
+)
+```
+
+```{python}
+star.fact.head().collect()
+
+```
+
+```{python}
+star.dim_stratifiers.collect()
+```
+
+
 ### Environmental Variables for Stateless Apps
 
 There are several reusable basesettings and configuration models that when called
