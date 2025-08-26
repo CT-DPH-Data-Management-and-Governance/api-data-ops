@@ -17,7 +17,7 @@ class ACSStarModel(BaseModel):
     dim_universe: pl.LazyFrame
     dim_concept: pl.LazyFrame
     dim_valuetype: pl.LazyFrame
-    dim_measure: pl.LazyFrame
+    dim_health_indicator: pl.LazyFrame
     dim_endpoint: pl.LazyFrame
     dim_dataset: pl.LazyFrame
 
@@ -27,7 +27,7 @@ class ACSStarModel(BaseModel):
 class ACSStarModelBuilder(BaseModel):
     api_data: APIData | pl.LazyFrame
     fact: pl.LazyFrame = pl.LazyFrame()
-    dim_measure: pl.LazyFrame = pl.LazyFrame()
+    dim_health_indicator: pl.LazyFrame = pl.LazyFrame()
     dim_stratifiers: pl.LazyFrame = pl.LazyFrame()
     dim_universe: pl.LazyFrame = pl.LazyFrame()
     dim_concept: pl.LazyFrame = pl.LazyFrame()
@@ -155,18 +155,20 @@ class ACSStarModelBuilder(BaseModel):
         self.fact = fact
         return self
 
-    def set_measure(self, measure: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
-        if measure is not None:
-            self.dim_measure = measure.lazy()
+    def set_health_indicator(
+        self, health_indicator: pl.DataFrame | None = None
+    ) -> "ACSStarModelBuilder":
+        if health_indicator is not None:
+            self.dim_health_indicator = health_indicator.lazy()
             return self
 
-        measure = (
-            self._long.select(["DimMeasureID", "measure"])
+        health_indicator = (
+            self._long.select(["DimHealthIndicatorID", "health_indicator"])
             .unique()
-            .sort(by="DimMeasureID")
+            .sort(by="DimHealthIndicatorID")
         )
 
-        self.dim_measure = measure
+        self.dim_health_indicator = health_indicator
         return self
 
     def set_universe(
@@ -321,7 +323,7 @@ class ACSStarModelBuilder(BaseModel):
         """Builds and returns the final model"""
         return ACSStarModel(
             fact=self.fact,
-            dim_measure=self.dim_measure,
+            dim_health_indicator=self.dim_health_indicator,
             dim_stratifiers=self.dim_stratifiers,
             dim_universe=self.dim_universe,
             dim_concept=self.dim_concept,
