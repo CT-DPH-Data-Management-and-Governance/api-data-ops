@@ -45,41 +45,51 @@ class ACSStarModelBuilder(BaseModel):
         else:
             user_input = self.api_data
 
-        starter = user_input.with_columns(
-            pl.lit(None).cast(pl.UInt32).alias("DimUniverseID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimConceptID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimEndpointID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimMeasureID"),
-        ).with_columns(
-            pl.struct(["endpoint", "stratifier_id"])
-            .rank("dense")
-            .alias("endpoint_based_strat_id"),
-            pl.when(pl.col("measure_id").is_not_null())
-            .then(
-                pl.struct(
-                    pl.col("universe").rank("dense").alias("DimUniverseID"),
-                    pl.col("concept").rank("dense").alias("DimConceptID"),
-                    pl.col("endpoint").rank("dense").alias("DimEndpointID"),
-                    pl.col("dataset").rank("dense").alias("DimDatasetID"),
-                    pl.col("value_type").rank("dense").alias("DimValueTypeID"),
-                    pl.struct(["endpoint", "measure_id"])
-                    .rank("dense")
-                    .alias("DimMeasureID"),
-                )
+        starter = (
+            user_input.with_columns(
+                pl.lit(None).cast(pl.UInt32).alias("DimUniverseID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimConceptID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimEndpointID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimHealthIndicatorID"),
+                pl.col("measure").alias("health_indicator"),
+                pl.col("measure_id").alias("health_indicator_id"),
             )
-            .otherwise(
-                pl.struct(
-                    "DimUniverseID",
-                    "DimConceptID",
-                    "DimEndpointID",
-                    "DimDatasetID",
-                    "DimValueTypeID",
-                    "DimMeasureID",
-                )
+            .with_columns(
+                pl.col("universe").str.to_lowercase(),
+                pl.col("concept").str.to_lowercase(),
+                pl.col("health_indicator_id").str.to_lowercase(),
             )
-            .struct.unnest(),
+            .with_columns(
+                pl.struct(["endpoint", "stratifier_id"])
+                .rank("dense")
+                .alias("endpoint_based_strat_id"),
+                pl.when(pl.col("health_indicator_id").is_not_null())
+                .then(
+                    pl.struct(
+                        pl.col("universe").rank("dense").alias("DimUniverseID"),
+                        pl.col("concept").rank("dense").alias("DimConceptID"),
+                        pl.col("endpoint").rank("dense").alias("DimEndpointID"),
+                        pl.col("dataset").rank("dense").alias("DimDatasetID"),
+                        pl.col("value_type").rank("dense").alias("DimValueTypeID"),
+                        pl.struct(["endpoint", "health_indicator_id"])
+                        .rank("dense")
+                        .alias("DimHealthIndicatorID"),
+                    )
+                )
+                .otherwise(
+                    pl.struct(
+                        "DimUniverseID",
+                        "DimConceptID",
+                        "DimEndpointID",
+                        "DimDatasetID",
+                        "DimValueTypeID",
+                        "DimHealthIndicatorID",
+                    )
+                )
+                .struct.unnest(),
+            )
         )
 
         return starter
@@ -89,14 +99,22 @@ class ACSStarModelBuilder(BaseModel):
     def _strats(self) -> pl.LazyFrame:
         """Return the stratifier data from the APIData"""
 
-        return self._starter.filter(pl.col("measure_id").is_null()).collect().lazy()
+        return (
+            self._starter.filter(pl.col("health_indicator_id").is_null())
+            .collect()
+            .lazy()
+        )
 
     @computed_field
     @property
     def _long(self) -> pl.LazyFrame:
         """Return the long data from the APIData"""
 
-        return self._starter.filter(pl.col("measure_id").is_not_null()).collect().lazy()
+        return (
+            self._starter.filter(pl.col("health_indicator_id").is_not_null())
+            .collect()
+            .lazy()
+        )
 
     def set_fact(self, fact: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
         if fact is not None:
@@ -116,8 +134,8 @@ class ACSStarModelBuilder(BaseModel):
                     "value_type",
                     "stratifier_id",
                     "endpoint_based_strat_id",
-                    "measure_id",
-                    "measure",
+                    "health_indicator_id",
+                    "health_indicator",
                 ]
             )
             .with_row_index(name="FactACSID", offset=1)
