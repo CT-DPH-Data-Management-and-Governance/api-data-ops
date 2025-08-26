@@ -123,6 +123,7 @@ class ACSStarModelBuilder(BaseModel):
             .with_row_index(name="FactACSID", offset=1)
             .select(
                 pl.col("FactACSID"),
+                pl.col("variable").alias("acs_variable"),
                 pl.col("value").alias("value_text"),
                 pl.col("value").cast(pl.Float64, strict=False).alias("value_numeric"),
                 pl.col("year"),
