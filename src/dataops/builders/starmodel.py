@@ -53,13 +53,12 @@ class ACSStarModelBuilder(BaseModel):
                 pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
                 pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
                 pl.lit(None).cast(pl.UInt32).alias("DimHealthIndicatorID"),
-                pl.col("measure").alias("health_indicator"),
+                pl.col("measure").str.to_lowercase().alias("health_indicator"),
                 pl.col("measure_id").alias("health_indicator_id"),
             )
             .with_columns(
                 pl.col("universe").str.to_lowercase(),
                 pl.col("concept").str.to_lowercase(),
-                pl.col("health_indicator").str.to_lowercase(),
             )
             .with_columns(
                 pl.struct(["endpoint", "stratifier_id"])
@@ -73,7 +72,15 @@ class ACSStarModelBuilder(BaseModel):
                         pl.col("endpoint").rank("dense").alias("DimEndpointID"),
                         pl.col("dataset").rank("dense").alias("DimDatasetID"),
                         pl.col("value_type").rank("dense").alias("DimValueTypeID"),
+                        # the creation of this is borked upstream I think
+                        # this is closer to endpoint based strat id
+                        # however we can do a rank based on the values themselves
+                        # we have the acs var id - who cares if the measure names
+                        # are the same - they won't be once we fix upstream
                         pl.struct(["endpoint", "health_indicator_id"])
+                        .rank("dense")
+                        .alias("endpoint_based_health_indicator_id"),
+                        pl.col("health_indicator")
                         .rank("dense")
                         .alias("DimHealthIndicatorID"),
                     )
