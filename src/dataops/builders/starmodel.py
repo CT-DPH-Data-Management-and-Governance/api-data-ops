@@ -59,7 +59,7 @@ class ACSStarModelBuilder(BaseModel):
             .with_columns(
                 pl.col("universe").str.to_lowercase(),
                 pl.col("concept").str.to_lowercase(),
-                pl.col("health_indicator_id").str.to_lowercase(),
+                pl.col("health_indicator").str.to_lowercase(),
             )
             .with_columns(
                 pl.struct(["endpoint", "stratifier_id"])
