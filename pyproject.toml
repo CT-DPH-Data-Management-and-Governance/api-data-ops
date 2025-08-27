@@ -1,6 +1,6 @@
 [project]
 name = "dataops"
-version = "0.9.1"
+version = "0.10.0"
 description = "DPH DMAG Data Operations"
 readme = "README.md"
 authors = [

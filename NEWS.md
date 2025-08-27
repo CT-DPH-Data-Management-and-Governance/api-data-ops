@@ -1,5 +1,9 @@
 > Note: This package is in active development, expect breaking changes.
 
+## v0.10.0
+- standardize text and repleace "measure" with "health indicator" to better
+mirror world health organization language.
+
 ## v0.9.1
 
 ### Fixes
