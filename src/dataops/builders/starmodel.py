@@ -17,7 +17,7 @@ class ACSStarModel(BaseModel):
     dim_universe: pl.LazyFrame
     dim_concept: pl.LazyFrame
     dim_valuetype: pl.LazyFrame
-    dim_measure: pl.LazyFrame
+    dim_health_indicator: pl.LazyFrame
     dim_endpoint: pl.LazyFrame
     dim_dataset: pl.LazyFrame
 
@@ -27,7 +27,7 @@ class ACSStarModel(BaseModel):
 class ACSStarModelBuilder(BaseModel):
     api_data: APIData | pl.LazyFrame
     fact: pl.LazyFrame = pl.LazyFrame()
-    dim_measure: pl.LazyFrame = pl.LazyFrame()
+    dim_health_indicator: pl.LazyFrame = pl.LazyFrame()
     dim_stratifiers: pl.LazyFrame = pl.LazyFrame()
     dim_universe: pl.LazyFrame = pl.LazyFrame()
     dim_concept: pl.LazyFrame = pl.LazyFrame()
@@ -45,41 +45,58 @@ class ACSStarModelBuilder(BaseModel):
         else:
             user_input = self.api_data
 
-        starter = user_input.with_columns(
-            pl.lit(None).cast(pl.UInt32).alias("DimUniverseID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimConceptID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimEndpointID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
-            pl.lit(None).cast(pl.UInt32).alias("DimMeasureID"),
-        ).with_columns(
-            pl.struct(["endpoint", "stratifier_id"])
-            .rank("dense")
-            .alias("endpoint_based_strat_id"),
-            pl.when(pl.col("measure_id").is_not_null())
-            .then(
-                pl.struct(
-                    pl.col("universe").rank("dense").alias("DimUniverseID"),
-                    pl.col("concept").rank("dense").alias("DimConceptID"),
-                    pl.col("endpoint").rank("dense").alias("DimEndpointID"),
-                    pl.col("dataset").rank("dense").alias("DimDatasetID"),
-                    pl.col("value_type").rank("dense").alias("DimValueTypeID"),
-                    pl.struct(["endpoint", "measure_id"])
-                    .rank("dense")
-                    .alias("DimMeasureID"),
-                )
+        starter = (
+            user_input.with_columns(
+                pl.lit(None).cast(pl.UInt32).alias("DimUniverseID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimConceptID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimEndpointID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimDatasetID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimValueTypeID"),
+                pl.lit(None).cast(pl.UInt32).alias("DimHealthIndicatorID"),
+                pl.col("measure").str.to_lowercase().alias("health_indicator"),
+                pl.col("measure_id").alias("health_indicator_id"),
             )
-            .otherwise(
-                pl.struct(
-                    "DimUniverseID",
-                    "DimConceptID",
-                    "DimEndpointID",
-                    "DimDatasetID",
-                    "DimValueTypeID",
-                    "DimMeasureID",
-                )
+            .with_columns(
+                pl.col("universe").str.to_lowercase(),
+                pl.col("concept").str.to_lowercase(),
             )
-            .struct.unnest(),
+            .with_columns(
+                pl.struct(["endpoint", "stratifier_id"])
+                .rank("dense")
+                .alias("endpoint_based_strat_id"),
+                pl.when(pl.col("health_indicator_id").is_not_null())
+                .then(
+                    pl.struct(
+                        pl.col("universe").rank("dense").alias("DimUniverseID"),
+                        pl.col("concept").rank("dense").alias("DimConceptID"),
+                        pl.col("endpoint").rank("dense").alias("DimEndpointID"),
+                        pl.col("dataset").rank("dense").alias("DimDatasetID"),
+                        pl.col("value_type").rank("dense").alias("DimValueTypeID"),
+                        # the creation of this is borked upstream I think
+                        # this is closer to endpoint based strat id
+                        # however we can do a rank based on the values themselves
+                        # we have the acs var id - who cares if the measure names
+                        # are the same - they won't be once we fix upstream
+                        pl.struct(["endpoint", "health_indicator_id"])
+                        .rank("dense")
+                        .alias("endpoint_based_health_indicator_id"),
+                        pl.col("health_indicator")
+                        .rank("dense")
+                        .alias("DimHealthIndicatorID"),
+                    )
+                )
+                .otherwise(
+                    pl.struct(
+                        "DimUniverseID",
+                        "DimConceptID",
+                        "DimEndpointID",
+                        "DimDatasetID",
+                        "DimValueTypeID",
+                        "DimHealthIndicatorID",
+                    )
+                )
+                .struct.unnest(),
+            )
         )
 
         return starter
@@ -89,14 +106,22 @@ class ACSStarModelBuilder(BaseModel):
     def _strats(self) -> pl.LazyFrame:
         """Return the stratifier data from the APIData"""
 
-        return self._starter.filter(pl.col("measure_id").is_null()).collect().lazy()
+        return (
+            self._starter.filter(pl.col("health_indicator_id").is_null())
+            .collect()
+            .lazy()
+        )
 
     @computed_field
     @property
     def _long(self) -> pl.LazyFrame:
         """Return the long data from the APIData"""
 
-        return self._starter.filter(pl.col("measure_id").is_not_null()).collect().lazy()
+        return (
+            self._starter.filter(pl.col("health_indicator_id").is_not_null())
+            .collect()
+            .lazy()
+        )
 
     def set_fact(self, fact: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
         if fact is not None:
@@ -116,8 +141,8 @@ class ACSStarModelBuilder(BaseModel):
                     "value_type",
                     "stratifier_id",
                     "endpoint_based_strat_id",
-                    "measure_id",
-                    "measure",
+                    "health_indicator_id",
+                    "health_indicator",
                 ]
             )
             .with_row_index(name="FactACSID", offset=1)
@@ -137,18 +162,20 @@ class ACSStarModelBuilder(BaseModel):
         self.fact = fact
         return self
 
-    def set_measure(self, measure: pl.DataFrame | None = None) -> "ACSStarModelBuilder":
-        if measure is not None:
-            self.dim_measure = measure.lazy()
+    def set_health_indicator(
+        self, health_indicator: pl.DataFrame | None = None
+    ) -> "ACSStarModelBuilder":
+        if health_indicator is not None:
+            self.dim_health_indicator = health_indicator.lazy()
             return self
 
-        measure = (
-            self._long.select(["DimMeasureID", "measure"])
+        health_indicator = (
+            self._long.select(["DimHealthIndicatorID", "health_indicator"])
             .unique()
-            .sort(by="DimMeasureID")
+            .sort(by="DimHealthIndicatorID")
         )
 
-        self.dim_measure = measure
+        self.dim_health_indicator = health_indicator
         return self
 
     def set_universe(
@@ -303,7 +330,7 @@ class ACSStarModelBuilder(BaseModel):
         """Builds and returns the final model"""
         return ACSStarModel(
             fact=self.fact,
-            dim_measure=self.dim_measure,
+            dim_health_indicator=self.dim_health_indicator,
             dim_stratifiers=self.dim_stratifiers,
             dim_universe=self.dim_universe,
             dim_concept=self.dim_concept,
