@@ -264,19 +264,16 @@ class APIDataMixin:
         Returns the extra, often metadata or
         geography-related rows from the LazyFrame.
         """
-        lf = self._lazyframe.with_columns(
-            pl.col("variable").str.split("_").list.first().alias("computed_group")
-        )
 
-        groups = (
-            lf.select("group")
-            .unique()
-            .filter(pl.col("group").is_not_null())
-            .collect()
-            .item()
+        return (
+            self._lazyframe.with_columns(
+                pl.col("variable").str.split("_").list.first().alias("computed_group"),
+            )
+            .with_columns(
+                pl.col("group").unique().drop_nulls().implode().alias("expected_groups")
+            )
+            .filter(~pl.col("computed_group").is_in(pl.col("expected_groups")))
         )
-
-        return lf.filter(pl.col("computed_group").ne(groups))
 
     @computed_field
     @property
