@@ -176,24 +176,24 @@ class APIDataMixin:
 
         # ensure you have the right variables
         endpoint_vars = (
-            pl.LazyFrame({"vars": self.endpoint.variables})
+            pl.LazyFrame({"variable": self.endpoint.variables})
             .with_columns(
-                pl.col("vars")
+                pl.col("variable")
                 .str.replace_all("\\(|\\)", " ")
                 .str.strip_chars()
                 .str.split(by=" ")
             )
-            .select("vars")
+            .select("variable")
             .collect()
-            .explode("vars")
+            .explode("variable")
             .lazy()
             .with_columns(
-                pl.col("vars").str.split("_").list.first().alias("group"),
+                pl.col("variable").str.split("_").list.first().alias("group"),
             )
         )
 
         relevant_variable_labels = self._var_labels.join(
-            endpoint_vars, how="inner", on="group"
+            endpoint_vars, how="inner", on="variable"
         )
 
         final_cols = [
