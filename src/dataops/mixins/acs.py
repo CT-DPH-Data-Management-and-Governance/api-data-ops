@@ -265,15 +265,10 @@ class APIDataMixin:
         geography-related rows from the LazyFrame.
         """
 
-        return (
-            self._lazyframe.with_columns(
-                pl.col("variable").str.split("_").list.first().alias("computed_group"),
-            )
-            .with_columns(
-                pl.col("group").unique().drop_nulls().implode().alias("expected_groups")
-            )
-            .filter(~pl.col("computed_group").is_in(pl.col("expected_groups")))
-        )
+        return self._lazyframe.with_columns(
+            pl.col("variable").str.split("_").list.first().alias("computed_group"),
+            pl.col("group").unique().drop_nulls().implode().alias("expected_groups"),
+        ).filter(~pl.col("computed_group").is_in(pl.col("expected_groups")))
 
     @computed_field
     @property
