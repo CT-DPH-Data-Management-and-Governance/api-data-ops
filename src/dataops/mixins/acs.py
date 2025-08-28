@@ -77,6 +77,11 @@ class APIEndpointMixin:
         match self.table_type:
             case TableType.unknown:
                 return last_resort
+            case TableType.subject:
+                if self.group is None:
+                    return f"{self.base_url}/{self.year}/{self.dataset}/variables"
+                else:
+                    return f"{self.base_url}/{self.year}/{self.dataset}/groups/{self.group}"
             case _:
                 return f"{self.base_url}/{self.year}/{self.dataset}/groups/{self.group}"
 
