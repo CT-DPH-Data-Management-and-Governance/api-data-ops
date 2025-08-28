@@ -174,10 +174,10 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
 
         dataset = self.endpoint.dataset
 
-        long = (
+        output = (
             self.standard_parse()
             .drop("row_id")
-            .with_columns(pl.col("label_end").fill_null(""))
+            .with_columns(pl.col(["label_end", "label_stratifier"]).fill_null(""))
             .with_columns(
                 pl.concat_str(
                     [
@@ -189,6 +189,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                     ]
                 )
                 .str.strip_chars_end(" - ")
+                .str.strip_chars_end(":")
                 .str.strip_chars()
                 .alias("measure"),
                 pl.when(pl.col("label_line_type").is_null())
@@ -218,7 +219,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             .lazy()
         )
 
-        return long
+        return output
 
     def wide(self) -> pl.LazyFrame:
         """
