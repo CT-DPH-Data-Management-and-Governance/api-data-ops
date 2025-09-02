@@ -175,7 +175,7 @@ class APIDataMixin:
         """
 
         # ensure you have the right variables
-        endpoint_vars = (
+        variable_groups = (
             pl.LazyFrame({"variable": self.endpoint.variables})
             .with_columns(
                 pl.col("variable")
@@ -186,14 +186,16 @@ class APIDataMixin:
             .select("variable")
             .collect()
             .explode("variable")
-            .lazy()
-            .with_columns(
-                pl.col("variable").str.split("_").list.first().alias("group"),
+            .select(
+                pl.col("variable").str.split("_").list.first().alias("computed_group"),
             )
+            .unique()
+            .to_series()
+            .to_list()
         )
 
-        relevant_variable_labels = self._var_labels.join(
-            endpoint_vars, how="inner", on="variable"
+        relevant_variable_labels = self._var_labels.filter(
+            pl.col("group").is_in(variable_groups)
         )
 
         final_cols = [
