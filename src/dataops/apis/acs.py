@@ -162,6 +162,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             "measure_id",
             "universe",
             "concept",
+            "short_measure",
             "measure",
             "value_type",
             "value",
@@ -191,6 +192,21 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
                 .str.strip_chars_end(" - ")
                 .str.strip_chars_end(":")
                 .str.strip_chars()
+                .alias("short_measure"),
+                pl.concat_str(
+                    [
+                        pl.col("label_concept_base"),
+                        pl.lit(": "),
+                        pl.col("label_stratifier"),
+                        pl.lit(" - "),
+                        pl.col("label_end"),
+                        pl.lit(" "),
+                        pl.col("label_tail"),
+                    ]
+                )
+                .str.strip_chars_end(" - ")
+                .str.strip_chars_end(":")
+                .str.strip_chars()
                 .alias("measure"),
                 pl.when(pl.col("label_line_type").is_null())
                 .then(pl.col("variable"))
@@ -215,8 +231,6 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             .sort(["stratifier_id", "variable"])
             .with_row_index("row_id", offset=1)
             .select(order)
-            .collect()
-            .lazy()
         )
 
         return output
@@ -356,56 +370,44 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
         year = self.endpoint.year
         endpoint = self.endpoint.url_no_key
 
-        content = (
-            self._lazyframe.with_columns(
-                pl.lit(geos).alias("url_geography"),
-                pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
-                pl.lit(year).alias("year"),
-                pl.lit(endpoint).alias("endpoint"),
-            )
-            .collect()
-            .lazy()
+        content = self._lazyframe.with_columns(
+            pl.lit(geos).alias("url_geography"),
+            pl.col("value").cast(pl.Float32, strict=False).alias("value_numeric"),
+            pl.lit(year).alias("year"),
+            pl.lit(endpoint).alias("endpoint"),
         )
 
-        parsed_labels = (
-            self._parse_label()
-            .select(
-                [
-                    "row_id",
-                    "exclaim_count",
-                    "label_line_type",
-                    "label_concept_base",
-                    "label_stratifier",
-                    "label_end",
-                ]
-            )
-            .collect()
-            .lazy()
+        parsed_labels = self._parse_label().select(
+            [
+                "row_id",
+                "exclaim_count",
+                "label_line_type",
+                "label_concept_base",
+                "label_stratifier",
+                "label_end",
+                "label_tail",
+            ]
         )
 
         parsed_vars = (
-            (
-                self._parse_vars()
-                .select(
-                    [
-                        "row_id",
-                        "measure_id",
-                        "table_type",
-                        "table_id",
-                        "table_subject_id",
-                        "subject_table_number",
-                        "table_id_suffix",
-                        "column_id",
-                        "column_number",
-                        "line_id",
-                        "line_number",
-                        "line_suffix",
-                    ]
-                )
-                .filter(pl.col("table_type").is_not_null())
+            self._parse_vars()
+            .select(
+                [
+                    "row_id",
+                    "measure_id",
+                    "table_type",
+                    "table_id",
+                    "table_subject_id",
+                    "subject_table_number",
+                    "table_id_suffix",
+                    "column_id",
+                    "column_number",
+                    "line_id",
+                    "line_number",
+                    "line_suffix",
+                ]
             )
-            .collect()
-            .lazy()
+            .filter(pl.col("table_type").is_not_null())
         )
 
         order = [
@@ -427,6 +429,7 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             "label_concept_base",
             "label_stratifier",
             "label_end",
+            "label_tail",
             "table_type",
             "table_id",
             "table_subject_id",
@@ -444,8 +447,6 @@ class APIData(APIRequestMixin, APIDataMixin, BaseModel):
             content.join(parsed_labels, how="left", on="row_id")
             .join(parsed_vars, how="left", on="row_id")
             .select(order)
-            .collect()
-            .lazy()
         )
 
         return output
