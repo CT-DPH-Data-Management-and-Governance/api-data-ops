@@ -131,15 +131,51 @@ def _(huh, pl, star):
 
 @app.cell
 def _(pl, star):
-    star.fact.filter(pl.col("DimHealthIndicatorID").eq(809)).filter(
+    star.fact.filter(pl.col("DimHealthIndicatorID").eq(813)).filter(
         pl.col("DimValueTypeID").eq(5)
     ).collect()
     return
 
 
 @app.cell
-def _():
-    # look through old chats - find vars that changed - see if we caapture them/ keep consistant dim health indactor ids.
+def _(mo):
+    mo.md(
+        "some of this stuff looks weird - but it might be better to let others take a look as well."
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("TODO: add a dim_acs_variable etc...")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("## write it out")
+    return
+
+
+@app.cell
+def _(star):
+    star
+    return
+
+
+@app.cell(disabled=True)
+def _(star):
+    # TODO: add this as a method to builder
+    begin = "adhoc/adhoc_"
+    end = ".parquet"
+    star.fact.sink_parquet(f"{begin}fact{end}")
+    star.dim_stratifiers.sink_parquet(f"{begin}stratifiers{end}")
+    star.dim_universe.sink_parquet(f"{begin}universe{end}")
+    star.dim_concept.sink_parquet(f"{begin}concept{end}")
+    star.dim_valuetype.sink_parquet(f"{begin}valuetype{end}")
+    star.dim_health_indicator.sink_parquet(f"{begin}healthindicator{end}")
+    star.dim_endpoint.sink_parquet(f"{begin}endpoint{end}")
+    star.dim_dataset.sink_parquet(f"{begin}dataset{end}")
     return
 
 
