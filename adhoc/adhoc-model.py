@@ -24,26 +24,31 @@ def _(mo):
 
 
 @app.cell
-def _(mo):
-    mo.md("""Parquet Data Preview:""")
-    return
+def _(data_file, mo):
+    has_data = False
+
+    if data_file.value:
+        has_data = True
+        mo.md("""Parquet Data Preview:""")
+    else:
+        mo.stop(True)
+    return (has_data,)
 
 
 @app.cell
-def _(data_file, pl):
-    if data_file.value:
+def _(data_file, has_data, mo, pl):
+    if has_data:
         long_data = pl.scan_parquet(data_file.contents())
     else:
-        long_data = pl.LazyFrame()
+        mo.stop(True, mo.md("**Upload parquet data to continue.**"))
 
-
-    long_data.head().collect()
+    mo.md("""## Star Model Builder""")
     return (long_data,)
 
 
 @app.cell
-def _(mo):
-    mo.md("""## Star Model Builder""")
+def _(long_data):
+    long_data.head(15).collect()
     return
 
 
@@ -55,7 +60,6 @@ def _(ACSStarModelBuilder, long_data):
 
 @app.cell
 def _(builder):
-    star = False
     try:
         star = (
             builder.set_stratifiers()
@@ -76,15 +80,14 @@ def _(builder):
 
 @app.cell
 def _(star):
-    if star:
-        fact = star.fact
-        dim_health_indicator = star.dim_health_indicator
-        dim_concept = star.dim_concept
-        dim_dataset = star.dim_dataset
-        dim_endpoint = star.dim_endpoint
-        dim_stratifiers = star.dim_stratifiers
-        dim_universe = star.dim_universe
-        dim_valuetype = star.dim_valuetype
+    fact = star.fact
+    dim_health_indicator = star.dim_health_indicator
+    dim_concept = star.dim_concept
+    dim_dataset = star.dim_dataset
+    dim_endpoint = star.dim_endpoint
+    dim_stratifiers = star.dim_stratifiers
+    dim_universe = star.dim_universe
+    dim_valuetype = star.dim_valuetype
     return (
         dim_concept,
         dim_dataset,
@@ -99,27 +102,24 @@ def _(star):
 
 @app.cell
 def _(mo):
-    mo.md("""Fact:""")
+    mo.md("""**Fact:**""")
     return
 
 
 @app.cell
-def _(fact, pl, star):
-    if star:
-        _head = fact.head(15).collect()
-    else:
-        _head = pl.DataFrame().head()
-    _head
+def _(fact):
+    fact.head(15).collect()
     return
 
 
 @app.cell
-def _(mo):
-    parquet_export_button = mo.ui.run_button(
-        tooltip="Export Model to parquet files.",
-        label="Export Model",
-    )
-    parquet_export_button
+def _(has_data, mo):
+    if has_data:
+        parquet_export_button = mo.ui.run_button(
+            tooltip="Export Model to parquet files.",
+            label="Export Model",
+        )
+        parquet_export_button
     return (parquet_export_button,)
 
 
@@ -133,18 +133,11 @@ def _(
     dim_universe,
     dim_valuetype,
     fact,
-    mo,
     parquet_export_button,
 ):
-    parquet_export_button
-    with mo.status.spinner(
-        title="Exporting to Parquet...", remove_on_exit=False
-    ) as _spinner:
-        _spinner.update("Writing Fact Parquet...")
-
+    if parquet_export_button.value:
         fact.sink_parquet("fact.parquet")
 
-        _spinner.update("Writing out Dimensions...")
         dim_health_indicator.sink_parquet("dim_health_indicator.parquet")
         dim_concept.sink_parquet("dim_concept.parquet")
         dim_dataset.sink_parquet("dim_dataset.parquet")
@@ -152,8 +145,6 @@ def _(
         dim_stratifiers.sink_parquet("dim_stratifiers.parquet")
         dim_universe.sink_parquet("dim_universe.parquet")
         dim_valuetype.sink_parquet("dim_valuetype.parquet")
-
-        _spinner.update("Done - Parquet files saved.")
     return
 
 
