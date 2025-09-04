@@ -133,12 +133,18 @@ def _(
     dim_universe,
     dim_valuetype,
     fact,
+    mo,
     parquet_export_button,
 ):
-    if parquet_export_button.value:
-        print("Exporting model to parquet files")
+    parquet_export_button
+    with mo.status.spinner(
+        title="Exporting to Parquet...", remove_on_exit=False
+    ) as _spinner:
+        _spinner.update("Writing Fact Parquet...")
 
         fact.sink_parquet("fact.parquet")
+
+        _spinner.update("Writing out Dimensions...")
         dim_health_indicator.sink_parquet("dim_health_indicator.parquet")
         dim_concept.sink_parquet("dim_concept.parquet")
         dim_dataset.sink_parquet("dim_dataset.parquet")
@@ -147,7 +153,7 @@ def _(
         dim_universe.sink_parquet("dim_universe.parquet")
         dim_valuetype.sink_parquet("dim_valuetype.parquet")
 
-        print("Files Exported")
+        _spinner.update("Done - Parquet files saved.")
     return
 
 
