@@ -18,43 +18,52 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    data_file = mo.ui.file(filetypes=[".parquet"])
-    data_file
-    return (data_file,)
+    parquet_selector = mo.ui.file(
+        filetypes=[".parquet"], label="Upload Parquet file"
+    )
+
+    parquet_selector
+    return (parquet_selector,)
 
 
 @app.cell
-def _(data_file, mo):
-    has_data = False
+def _(mo, parquet_selector, pl):
+    parquet_contents = parquet_selector.contents()
 
-    if data_file.value:
-        has_data = True
-        mo.md("""Parquet Data Preview:""")
-    else:
-        mo.stop(True)
-    return (has_data,)
+
+    def if_not_stop() -> None:
+        if not parquet_contents:
+            mo.stop(True)
+
+
+    if_not_stop()
+    data = pl.scan_parquet(parquet_contents)
+    return data, if_not_stop
 
 
 @app.cell
-def _(data_file, has_data, mo, pl):
-    if has_data:
-        long_data = pl.scan_parquet(data_file.contents())
-    else:
-        mo.stop(True, mo.md("**Upload parquet data to continue.**"))
-
+def _(if_not_stop, mo):
+    if_not_stop()
     mo.md("""## Star Model Builder""")
-    return (long_data,)
-
-
-@app.cell
-def _(long_data):
-    long_data.head(15).collect()
     return
 
 
 @app.cell
-def _(ACSStarModelBuilder, long_data):
-    builder = ACSStarModelBuilder(api_data=long_data)
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Parquet Preview""")
+    return
+
+
+@app.cell
+def _(data):
+    data.head(15).collect()
+    return
+
+
+@app.cell
+def _(ACSStarModelBuilder, data):
+    builder = ACSStarModelBuilder(api_data=data)
     return (builder,)
 
 
@@ -101,8 +110,9 @@ def _(star):
 
 
 @app.cell
-def _(mo):
-    mo.md("""**Fact:**""")
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Fact Preview""")
     return
 
 
@@ -113,13 +123,105 @@ def _(fact):
 
 
 @app.cell
-def _(has_data, mo):
-    if has_data:
-        parquet_export_button = mo.ui.run_button(
-            tooltip="Export Model to parquet files.",
-            label="Export Model",
-        )
-        parquet_export_button
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Concept Dimension Preview""")
+    return
+
+
+@app.cell
+def _(dim_concept):
+    dim_concept.head(15).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Dataset Dimension Preview""")
+    return
+
+
+@app.cell
+def _(dim_dataset):
+    dim_dataset.head(15).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Endpoint Dimension Preview""")
+    return
+
+
+@app.cell
+def _(dim_endpoint):
+    dim_endpoint.head(15).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Stratifiers Dimension Preview""")
+    return
+
+
+@app.cell
+def _(dim_stratifiers):
+    dim_stratifiers.head(15).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Universe Dimension Preview""")
+    return
+
+
+@app.cell
+def _(dim_universe):
+    dim_universe.head(15).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Value Type Dimension Preview""")
+    return
+
+
+@app.cell
+def _(dim_valuetype):
+    dim_valuetype.head(15).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""### Health Indicator Dimension Preview""")
+    return
+
+
+@app.cell
+def _(dim_health_indicator):
+    dim_health_indicator.head(15).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+
+    parquet_export_button = mo.ui.run_button(
+        tooltip="Export Model to parquet files.",
+        label="Export Model",
+    )
+    parquet_export_button
     return (parquet_export_button,)
 
 
