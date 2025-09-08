@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "polars==1.33.0",
+# ]
+# ///
+
 import marimo
 
 __generated_with = "0.15.2"
@@ -6,35 +13,67 @@ app = marimo.App(width="medium")
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md("""# Adhoc""")
+    mo.md("""# Adhoc Endpoint Puller""")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md("""## Data Read""")
+    mo.md("""## Read-in Parquet""")
     return
 
 
 @app.cell
-def _(pl):
-    acs_variable_targets = pl.read_parquet("adhoc/acs_variable_targets.parquet")
-    endpoints = (
-        pl.read_parquet("adhoc/group-based-urls.parquet").to_series().to_list()
+def _(mo):
+    parquet_selector = mo.ui.file(
+        filetypes=[".parquet"], label="Upload Parquet file"
     )
-    return acs_variable_targets, endpoints
+
+    parquet_selector
+    return (parquet_selector,)
 
 
 @app.cell
-def _(endpoints):
-    endpoints[0:5]
+def _(mo, parquet_selector, pl):
+    parquet_contents = parquet_selector.contents()
+
+
+    def if_not_stop() -> None:
+        if not parquet_contents:
+            mo.stop(True)
+
+
+    if_not_stop()
+    data = pl.scan_parquet(parquet_contents)
+    return data, if_not_stop
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""## Endpoint Preview""")
     return
 
 
 @app.cell
-def _(acs_variable_targets):
-    acs_variable_targets.head()
+def _(data, if_not_stop):
+    if_not_stop()
+    data.head().collect()
     return
+
+
+@app.cell
+def _(cs, data, if_not_stop, pl):
+    # convert to list
+    if_not_stop()
+    endpoints = (
+        data.select(cs.contains("endpoint", "url"))
+        .select(pl.first())
+        .collect()
+        .to_series()
+        .to_list()
+    )
+    return (endpoints,)
 
 
 @app.cell(hide_code=True)
@@ -44,7 +83,9 @@ def _(mo):
 
 
 @app.cell
-def _(APIData, APIEndpoint, endpoints, pl):
+def _(APIData, APIEndpoint, endpoints, if_not_stop, pl):
+    if_not_stop()
+
     all_frames = []
 
     for endpoint in endpoints:
@@ -52,38 +93,40 @@ def _(APIData, APIEndpoint, endpoints, pl):
         endpoint_data = APIData(endpoint=endpoint).long()
         all_frames.append(endpoint_data)
 
-    all_frames = pl.concat(all_frames)
-    return (all_frames,)
+    output = pl.concat(all_frames)
+    return (output,)
 
 
 @app.cell
-def _(all_frames):
-    all_frames.head().collect()
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("Output Preview")
     return
 
 
 @app.cell
-def _(acs_variable_targets, all_frames):
-    # ignoring that we lose all the stratifiers for a moment...
-    no_strats = all_frames.join(
-        acs_variable_targets.lazy(),
-        how="inner",
-        left_on="variable",
-        right_on="variable_id",
+def _(if_not_stop, output):
+    if_not_stop()
+    output.head(25).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+
+    parquet_export_button = mo.ui.run_button(
+        tooltip="Export Data to parquet file.", label="Export Data"
     )
-    no_strats.head().collect()
-    return (no_strats,)
+
+    parquet_export_button
+    return (parquet_export_button,)
 
 
 @app.cell
-def _(no_strats):
-    no_strats.sink_parquet("adhoc/no_strats.parquet")
-    return
-
-
-@app.cell
-def _(all_frames):
-    all_frames.sink_parquet("adhoc/adhoc.parquet")
+def _(output, parquet_export_button):
+    if parquet_export_button.value:
+        output.collect().write_parquet("adhoc-data-pull.parquet")
     return
 
 
@@ -91,9 +134,10 @@ def _(all_frames):
 def _():
     import marimo as mo
     import polars as pl
+    from polars import selectors as cs
 
     from dataops.apis.acs import APIEndpoint, APIData
-    return APIData, APIEndpoint, mo, pl
+    return APIData, APIEndpoint, cs, mo, pl
 
 
 if __name__ == "__main__":
