@@ -472,8 +472,10 @@ class APIDataMixin:
             )
             .with_columns(
                 pl.col("parts").list.first().alias("label_line_type"),
-                pl.col("parts").list.get(1).alias("label_concept_base"),
-                pl.col("parts").list.get(2).alias("label_stratifier"),
+                pl.col("parts")
+                .list.get(1, null_on_oob=True)
+                .alias("label_concept_base"),
+                pl.col("parts").list.get(2, null_on_oob=True).alias("label_stratifier"),
                 pl.col("parts").list.slice(3, 2).list.join(" ").alias("label_end"),
                 pl.col("parts").list.slice(5).list.join(" ").alias("label_tail"),
             )
