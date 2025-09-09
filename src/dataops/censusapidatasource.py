@@ -1,9 +1,10 @@
+from typing import Collection
 from pydantic import BaseModel
-from dataops.datasources import DataSource, ResponseData
+from dataops.datasources import DataSource
 
 
 class CensusAPIDataSource(BaseModel, DataSource):
     url: str
 
-    def fetch(self, url: str) -> ResponseData:
+    def fetch(self, url: str) -> Collection:
         pass

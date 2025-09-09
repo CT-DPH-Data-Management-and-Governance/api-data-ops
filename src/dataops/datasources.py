@@ -1,16 +1,11 @@
 from abc import ABC, abstractmethod
-
-
-class ResponseData(ABC):
-    """Response Data from the API"""
-
-    pass
+from typing import Collection
 
 
 class DataSource(ABC):
     """Abstract base class defining the contract for any data sources."""
 
     @abstractmethod
-    def fetch(url: str) -> ResponseData:
+    def fetch(url: str) -> Collection:
         """Fetch raw data from a given URL."""
         pass
