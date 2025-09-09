@@ -18,14 +18,8 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md("""### Years""")
-    return
-
-
-@app.cell
-def _(mo):
     year_select = mo.ui.multiselect(
-        options=[2021, 2022, 2023], label="Select years"
+        options=[2021, 2022, 2023], label="Select years:"
     )
     year_select
     return (year_select,)
@@ -39,14 +33,8 @@ def _(mo, year_select):
 
 @app.cell
 def _(mo):
-    mo.md("""### Read-in Parquet""")
-    return
-
-
-@app.cell
-def _(mo):
     parquet_selector = mo.ui.file(
-        filetypes=[".parquet"], label="Upload Parquet file"
+        filetypes=[".parquet"], label="Select Parquet file"
     )
 
     parquet_selector
@@ -65,7 +53,8 @@ def _(mo, parquet_selector, pl):
 
     if_not_stop()
     data = pl.scan_parquet(parquet_contents)
-    return data, if_not_stop
+    data_cols = data.collect_schema().names()
+    return data, data_cols, if_not_stop
 
 
 @app.cell
@@ -84,19 +73,30 @@ def _(data):
 @app.cell
 def _(if_not_stop, mo):
     if_not_stop()
-    mo.md("### Variable ID Column Name")
+    mo.md("### Specify Target Column Names")
     return
 
 
 @app.cell
-def _(data, if_not_stop, mo):
+def _(data_cols, if_not_stop, mo):
     if_not_stop()
     var_id_dropdown = mo.ui.dropdown(
-        options=data.collect_schema().names(),
-        label="Select the ACS Variable ID Column Name",
+        options=data_cols,
+        label="Select the ACS Variable ID Column Name:",
     )
     var_id_dropdown
     return (var_id_dropdown,)
+
+
+@app.cell
+def _(data_cols, if_not_stop, mo):
+    if_not_stop()
+    dataset_dropdown = mo.ui.dropdown(
+        options=data_cols,
+        label="Select the ACS Dataset Column Name:",
+    )
+    dataset_dropdown
+    return (dataset_dropdown,)
 
 
 @app.cell
@@ -107,30 +107,39 @@ def _():
 
 
 @app.cell
-def _(data, pl, var_id_dropdown):
-    cleanup = data.with_columns(
+def _(data, dataset_dropdown, pl, var_id_dropdown):
+    cleanup = data.select(
+        pl.col(var_id_dropdown.value),
+        pl.col(dataset_dropdown.value),
         pl.col(var_id_dropdown.value)
         .str.split(by="_")
         .list.first()
-        .alias("computed_group")
+        .alias("computed_group"),
     )
-
-    cleanup.head().collect()
     return (cleanup,)
 
 
 @app.cell
-def _():
-    # years = pl.DataFrame({"year": [2021, 2022, 2023]})
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("### Paremeter Preview")
     return
 
 
-@app.cell(disabled=True)
-def _(cleanup, pl, years):
+@app.cell
+def _(cleanup):
+    cleanup.head().collect()
+    return
+
+
+@app.cell
+def _(cleanup, dataset_dropdown, pl, year_select):
+    years = pl.LazyFrame({"year": year_select.value})
+
     pre_group_string = "?get=group("
     post_group_string = ")&for=state:09"
 
-    crossed = (
+    final = (
         cleanup.join(years, how="cross")
         .with_columns(
             pl.concat_str(
@@ -138,7 +147,7 @@ def _(cleanup, pl, years):
                     pl.lit("https://api.census.gov/data/"),
                     pl.col("year"),
                     pl.lit("/"),
-                    pl.col("dataset"),
+                    pl.col(dataset_dropdown.value),
                 ]
             )
             .str.strip_chars("/")
@@ -146,7 +155,7 @@ def _(cleanup, pl, years):
             pl.concat_str(
                 [
                     pl.lit(pre_group_string),
-                    pl.col("group"),
+                    pl.col("computed_group"),
                     pl.lit(post_group_string),
                 ]
             ).alias("post_base_string"),
@@ -157,8 +166,13 @@ def _(cleanup, pl, years):
             )
         )
     )
-    crossed.head()
-    return (crossed,)
+    return (final,)
+
+
+@app.cell
+def _(final):
+    final.collect()
+    return
 
 
 @app.cell
