@@ -77,6 +77,11 @@ class APIEndpointMixin:
         match self.table_type:
             case TableType.unknown:
                 return last_resort
+            case TableType.subject:
+                if self.group is None:
+                    return f"{self.base_url}/{self.year}/{self.dataset}/variables"
+                else:
+                    return f"{self.base_url}/{self.year}/{self.dataset}/groups/{self.group}"
             case _:
                 return f"{self.base_url}/{self.year}/{self.dataset}/groups/{self.group}"
 
@@ -170,25 +175,27 @@ class APIDataMixin:
         """
 
         # ensure you have the right variables
-        endpoint_vars = (
-            pl.LazyFrame({"vars": self.endpoint.variables})
+        variable_groups = (
+            pl.LazyFrame({"variable": self.endpoint.variables})
             .with_columns(
-                pl.col("vars")
+                pl.col("variable")
                 .str.replace_all("\\(|\\)", " ")
                 .str.strip_chars()
                 .str.split(by=" ")
             )
-            .select("vars")
+            .select("variable")
             .collect()
-            .explode("vars")
-            .lazy()
-            .with_columns(
-                pl.col("vars").str.split("_").list.first().alias("group"),
+            .explode("variable")
+            .select(
+                pl.col("variable").str.split("_").list.first().alias("computed_group"),
             )
+            .unique()
+            .to_series()
+            .to_list()
         )
 
-        relevant_variable_labels = self._var_labels.join(
-            endpoint_vars, how="inner", on="group"
+        relevant_variable_labels = self._var_labels.filter(
+            pl.col("group").is_in(variable_groups)
         )
 
         final_cols = [
@@ -259,19 +266,11 @@ class APIDataMixin:
         Returns the extra, often metadata or
         geography-related rows from the LazyFrame.
         """
-        lf = self._lazyframe.with_columns(
-            pl.col("variable").str.split("_").list.first().alias("computed_group")
-        )
 
-        groups = (
-            lf.select("group")
-            .unique()
-            .filter(pl.col("group").is_not_null())
-            .collect()
-            .item()
-        )
-
-        return lf.filter(pl.col("computed_group").ne(groups))
+        return self._lazyframe.with_columns(
+            pl.col("variable").str.split("_").list.first().alias("computed_group"),
+            pl.col("group").unique().drop_nulls().implode().alias("expected_groups"),
+        ).filter(~pl.col("computed_group").is_in(pl.col("expected_groups")))
 
     @computed_field
     @property
@@ -461,6 +460,7 @@ class APIDataMixin:
             "label_concept_base",
             "label_stratifier",
             "label_end",
+            "label_tail",
         ]
 
         output = (
@@ -468,17 +468,21 @@ class APIDataMixin:
                 pl.col("label")
                 .str.count_matches("!!", literal=True)
                 .alias("exclaim_count"),
-                pl.col("label")
-                .str.split_exact("!!", 3)
-                .struct.rename_fields(common_label_parts)
-                .alias("parts"),
+                pl.col("label").str.to_lowercase().str.split("!!").alias("parts"),
             )
-            .unnest("parts")
+            .with_columns(
+                pl.col("parts").list.first().alias("label_line_type"),
+                pl.col("parts")
+                .list.get(1, null_on_oob=True)
+                .alias("label_concept_base"),
+                pl.col("parts").list.get(2, null_on_oob=True).alias("label_stratifier"),
+                pl.col("parts").list.slice(3, 2).list.join(" ").alias("label_end"),
+                pl.col("parts").list.slice(5).list.join(" ").alias("label_tail"),
+            )
             .with_columns(
                 pl.col(common_label_parts)
                 .str.replace_all(r"--|:", "")
                 .str.strip_chars()
-                .str.to_lowercase()
             )
         )
 
