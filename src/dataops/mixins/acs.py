@@ -175,7 +175,7 @@ class APIDataMixin:
         """
 
         # ensure you have the right variables
-        endpoint_vars = (
+        variable_groups = (
             pl.LazyFrame({"variable": self.endpoint.variables})
             .with_columns(
                 pl.col("variable")
@@ -186,14 +186,16 @@ class APIDataMixin:
             .select("variable")
             .collect()
             .explode("variable")
-            .lazy()
-            .with_columns(
-                pl.col("variable").str.split("_").list.first().alias("group"),
+            .select(
+                pl.col("variable").str.split("_").list.first().alias("computed_group"),
             )
+            .unique()
+            .to_series()
+            .to_list()
         )
 
-        relevant_variable_labels = self._var_labels.join(
-            endpoint_vars, how="inner", on="variable"
+        relevant_variable_labels = self._var_labels.filter(
+            pl.col("group").is_in(variable_groups)
         )
 
         final_cols = [
@@ -458,7 +460,7 @@ class APIDataMixin:
             "label_concept_base",
             "label_stratifier",
             "label_end",
-            "label_end_misc",
+            "label_tail",
         ]
 
         output = (
@@ -466,25 +468,22 @@ class APIDataMixin:
                 pl.col("label")
                 .str.count_matches("!!", literal=True)
                 .alias("exclaim_count"),
-                pl.col("label")
-                .str.split_exact("!!", 4)
-                .struct.rename_fields(common_label_parts)
-                .alias("parts"),
+                pl.col("label").str.to_lowercase().str.split("!!").alias("parts"),
             )
-            .unnest("parts")
-            .with_columns(pl.col("label_end_misc").fill_null(""))
+            .with_columns(
+                pl.col("parts").list.first().alias("label_line_type"),
+                pl.col("parts")
+                .list.get(1, null_on_oob=True)
+                .alias("label_concept_base"),
+                pl.col("parts").list.get(2, null_on_oob=True).alias("label_stratifier"),
+                pl.col("parts").list.slice(3, 2).list.join(" ").alias("label_end"),
+                pl.col("parts").list.slice(5).list.join(" ").alias("label_tail"),
+            )
             .with_columns(
                 pl.col(common_label_parts)
                 .str.replace_all(r"--|:", "")
                 .str.strip_chars()
-                .str.to_lowercase()
             )
-            .with_columns(
-                pl.concat_str(["label_end", "label_end_misc"], separator=" ").alias(
-                    "label_end"
-                )
-            )
-            .drop("label_end_misc")
         )
 
         return output
