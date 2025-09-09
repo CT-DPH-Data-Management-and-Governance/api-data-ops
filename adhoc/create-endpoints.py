@@ -99,21 +99,19 @@ def _(data_cols, if_not_stop, mo):
 
 
 @app.cell
-def _():
-    # targets = pl.read_parquet("adhoc/acs_variable_targets.parquet")
-    # targets.head()
-    return
-
-
-@app.cell
 def _(data, dataset_dropdown, pl, var_id_dropdown):
-    cleanup = data.select(
-        pl.col(var_id_dropdown.value),
-        pl.col(dataset_dropdown.value),
-        pl.col(var_id_dropdown.value)
-        .str.split(by="_")
-        .list.first()
-        .alias("computed_group"),
+    cleanup = (
+        data.select(
+            pl.col(var_id_dropdown.value).alias("variable_id"),
+            pl.col(dataset_dropdown.value).alias("dataset"),
+        )
+        .unique()
+        .with_columns(
+            pl.col("variable_id")
+            .str.split(by="_")
+            .list.first()
+            .alias("computed_group"),
+        )
     )
     return (cleanup,)
 
@@ -132,7 +130,9 @@ def _(cleanup):
 
 
 @app.cell
-def _(cleanup, dataset_dropdown, pl, year_select):
+def _(cleanup, if_not_stop, pl, year_select):
+    if_not_stop()
+
     years = pl.LazyFrame({"year": year_select.value})
 
     pre_group_string = "?get=group("
@@ -146,7 +146,7 @@ def _(cleanup, dataset_dropdown, pl, year_select):
                     pl.lit("https://api.census.gov/data/"),
                     pl.col("year"),
                     pl.lit("/"),
-                    pl.col(dataset_dropdown.value),
+                    pl.col("dataset"),
                 ]
             )
             .str.strip_chars("/")
@@ -161,7 +161,7 @@ def _(cleanup, dataset_dropdown, pl, year_select):
         )
         .with_columns(
             pl.concat_str([pl.col("base"), pl.col("post_base_string")]).alias(
-                "alt_group_base"
+                "group_based_endpoint"
             )
         )
     )
@@ -171,31 +171,35 @@ def _(cleanup, dataset_dropdown, pl, year_select):
 @app.cell
 def _(if_not_stop, mo):
     if_not_stop()
-    mo.md("""## For Group-based Endpoints:""")
+    mo.md("""### Group-based Endpoints:""")
     return
 
 
 @app.cell
 def _(final, pl):
-    group_based_urls = final.select(pl.col("alt_group_base").unique().sort())
+    group_based_urls = final.select(pl.col("group_based_endpoint").unique().sort())
     return (group_based_urls,)
 
 
 @app.cell
 def _(group_based_urls):
-    group_based_urls.collect()
+    group_based_urls.head().collect()
     return
 
 
 @app.cell
-def _(mo):
+def _(if_not_stop, mo):
+    if_not_stop()
+
     export_group_urls = mo.ui.run_button(label="Export group based urls")
     export_group_urls
     return (export_group_urls,)
 
 
 @app.cell
-def _(export_group_urls, group_based_urls):
+def _(export_group_urls, group_based_urls, if_not_stop):
+    if_not_stop()
+
     if export_group_urls.value:
         group_based_urls.sink_parquet("group-based-urls.parquet")
     return
@@ -204,31 +208,16 @@ def _(export_group_urls, group_based_urls):
 @app.cell
 def _(if_not_stop, mo):
     if_not_stop()
-    mo.md("""## For Variable Sets:""")
+    mo.md("""### Variable Sets:""")
     return
 
 
 @app.cell
-def _(crossed):
-    crossed.select("base").unique()
-    return
+def _(final, if_not_stop, pl):
+    if_not_stop()
 
+    grouped = final.select(["variable_id", "base"]).collect().group_by("base")
 
-@app.cell
-def _(final):
-    minimum = final.select(["variable_id", "base"])
-    minimum.head()
-    return (minimum,)
-
-
-@app.cell
-def _(minimum):
-    grouped = minimum.group_by("base")
-    return (grouped,)
-
-
-@app.cell
-def _(grouped):
     all_urls = []
     total_vars = 49
 
@@ -242,13 +231,26 @@ def _(grouped):
             url_chunks = f"{url}?get=NAME,{','.join(chunk)}&for=state:09"
             all_urls.append(url_chunks)
 
-    all_urls
-    return
+    variable_set = pl.LazyFrame({"variable_set_endpoints": all_urls})
+    variable_set.head().collect()
+    return (variable_set,)
 
 
 @app.cell
-def _():
-    # pl.DataFrame({"urls": all_urls}).write_parquet("adhoc/chunked_urls.parquet")
+def _(if_not_stop, mo):
+    if_not_stop()
+
+    export_variable_set_urls = mo.ui.run_button(
+        label="Export variable set based urls"
+    )
+    export_variable_set_urls
+    return (export_variable_set_urls,)
+
+
+@app.cell
+def _(export_variable_set_urls, variable_set):
+    if export_variable_set_urls.value:
+        variable_set.sink_parquet("variable-based-urls.parquet")
     return
 
 
