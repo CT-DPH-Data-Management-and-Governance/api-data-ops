@@ -12,23 +12,22 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md("""## Parameters""")
+    mo.md(
+        """
+    ## Parameters
+    ------------
+    """
+    )
     return
 
 
 @app.cell
 def _(mo):
     year_select = mo.ui.multiselect(
-        options=[2021, 2022, 2023], label="Select years:"
+        options=[2021, 2022, 2023], label="Select Years:"
     )
     year_select
     return (year_select,)
-
-
-@app.cell
-def _(mo, year_select):
-    mo.md(f"""Selected years: {year_select.value}""")
-    return
 
 
 @app.cell
@@ -170,33 +169,42 @@ def _(cleanup, dataset_dropdown, pl, year_select):
 
 
 @app.cell
-def _(final):
-    final.collect()
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""## For Group-based Endpoints:""")
     return
 
 
 @app.cell
-def _(mo):
-    mo.md("""# For Group-based Endpoints:""")
-    return
-
-
-@app.cell
-def _(crossed, pl):
-    group_based_urls = crossed.select(pl.col("alt_group_base").unique())
-    group_based_urls.head()
+def _(final, pl):
+    group_based_urls = final.select(pl.col("alt_group_base").unique().sort())
     return (group_based_urls,)
 
 
 @app.cell
 def _(group_based_urls):
-    group_based_urls.write_parquet("adhoc/group-based-urls.parquet")
+    group_based_urls.collect()
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("""# For Variable Sets:""")
+    export_group_urls = mo.ui.run_button(label="Export group based urls")
+    export_group_urls
+    return (export_group_urls,)
+
+
+@app.cell
+def _(export_group_urls, group_based_urls):
+    if export_group_urls.value:
+        group_based_urls.sink_parquet("group-based-urls.parquet")
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("""## For Variable Sets:""")
     return
 
 
@@ -207,14 +215,8 @@ def _(crossed):
 
 
 @app.cell
-def _(crossed):
-    crossed.select("variable_id").unique()
-    return
-
-
-@app.cell
-def _(crossed):
-    minimum = crossed.select(["variable_id", "base"])
+def _(final):
+    minimum = final.select(["variable_id", "base"])
     minimum.head()
     return (minimum,)
 
@@ -241,12 +243,12 @@ def _(grouped):
             all_urls.append(url_chunks)
 
     all_urls
-    return (all_urls,)
+    return
 
 
 @app.cell
-def _(all_urls, pl):
-    pl.DataFrame({"urls": all_urls}).write_parquet("adhoc/chunked_urls.parquet")
+def _():
+    # pl.DataFrame({"urls": all_urls}).write_parquet("adhoc/chunked_urls.parquet")
     return
 
 
