@@ -1,5 +1,6 @@
 from typing import Collection
-from pydantic import BaseModel
+
+# from pydantic import BaseModel
 from abc import ABC, abstractmethod
 import polars as pl
 
