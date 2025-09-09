@@ -17,8 +17,10 @@ class PolarsProcessor(DataProcessor):
     """Implemenetation of polars"""
 
     def to_lazyframe(self, data: Collection) -> pl.LazyFrame:
-        # add the _Rawframe wide stuff here
-        # load data
+        """
+        Returns the API Response data back in a dataframe
+        closely mirroring the raw response text, often as a
+        monstrously wide table.
+        """
 
-        # placeholder
-        return pl.LazyFrame()
+        return pl.LazyFrame(data=data[1:], schema=data[0], orient="row")
