@@ -1,40 +1,131 @@
 import marimo
 
-__generated_with = "0.15.0"
+__generated_with = "0.15.2"
 app = marimo.App(width="medium")
 
 
 @app.cell
+def _(mo):
+    mo.md("""# Adhoc ACS Endpoint Creator""")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""## Parameters""")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""### Years""")
+    return
+
+
+@app.cell
+def _(mo):
+    year_select = mo.ui.multiselect(
+        options=[2021, 2022, 2023], label="Select years"
+    )
+    year_select
+    return (year_select,)
+
+
+@app.cell
+def _(mo, year_select):
+    mo.md(f"""Selected years: {year_select.value}""")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""### Read-in Parquet""")
+    return
+
+
+@app.cell
+def _(mo):
+    parquet_selector = mo.ui.file(
+        filetypes=[".parquet"], label="Upload Parquet file"
+    )
+
+    parquet_selector
+    return (parquet_selector,)
+
+
+@app.cell
+def _(mo, parquet_selector, pl):
+    parquet_contents = parquet_selector.contents()
+
+
+    def if_not_stop() -> None:
+        if not parquet_contents:
+            mo.stop(True)
+
+
+    if_not_stop()
+    data = pl.scan_parquet(parquet_contents)
+    return data, if_not_stop
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("### Parquet Preview")
+    return
+
+
+@app.cell
+def _(data):
+    data.head(15).collect()
+    return
+
+
+@app.cell
+def _(if_not_stop, mo):
+    if_not_stop()
+    mo.md("### Variable ID Column Name")
+    return
+
+
+@app.cell
+def _(data, if_not_stop, mo):
+    if_not_stop()
+    var_id_dropdown = mo.ui.dropdown(
+        options=data.collect_schema().names(),
+        label="Select the ACS Variable ID Column Name",
+    )
+    var_id_dropdown
+    return (var_id_dropdown,)
+
+
+@app.cell
 def _():
-    import marimo as mo
-    import polars as pl
-    return mo, pl
+    # targets = pl.read_parquet("adhoc/acs_variable_targets.parquet")
+    # targets.head()
+    return
 
 
 @app.cell
-def _(pl):
-    targets = pl.read_parquet("adhoc/acs_variable_targets.parquet")
-    targets.head()
-    return (targets,)
+def _(data, pl, var_id_dropdown):
+    cleanup = data.with_columns(
+        pl.col(var_id_dropdown.value)
+        .str.split(by="_")
+        .list.first()
+        .alias("computed_group")
+    )
 
-
-@app.cell
-def _(pl, targets):
-    cleanup = targets.with_columns(
-        pl.col("almost_group").str.split(by="_").list.first().alias("group")
-    ).drop("almost_group")
-
-    cleanup.head()
+    cleanup.head().collect()
     return (cleanup,)
 
 
 @app.cell
-def _(pl):
-    years = pl.DataFrame({"year": [2021, 2022, 2023]})
-    return (years,)
+def _():
+    # years = pl.DataFrame({"year": [2021, 2022, 2023]})
+    return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(cleanup, pl, years):
     pre_group_string = "?get=group("
     post_group_string = ")&for=state:09"
@@ -143,6 +234,13 @@ def _(grouped):
 def _(all_urls, pl):
     pl.DataFrame({"urls": all_urls}).write_parquet("adhoc/chunked_urls.parquet")
     return
+
+
+@app.cell
+def _():
+    import marimo as mo
+    import polars as pl
+    return mo, pl
 
 
 if __name__ == "__main__":
